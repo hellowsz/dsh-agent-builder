@@ -12,7 +12,7 @@
   },
   "scripts": {
     "test": "vitest run",
-    "cli": "node --experimental-strip-types src/cli.ts"
+    "cli": "tsx src/cli.ts"
   },
   "dependencies": {
     "@dsh-agent-builder/evaluator": "workspace:*",
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "typescript": "^5.6.3",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "tsx": "^4.19.2"
   }
 }

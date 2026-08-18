@@ -1,0 +1,521 @@
+version: 1
+generatedAt: 2026-08-18T09:52:14.600Z
+note: 本清单由收集器机械筛选生成；trust=待核实 表示未经人工/AI 核验，接入前必须自行确认插件行为与安全性。
+count: 56
+plugins:
+  - name: deepseek-ai/deepseek-harness
+    url: https://github.com/deepseek-ai/deepseek-harness
+    description: "DeepSeek Harness: Everything is a Plugin."
+    stars: 156559
+    updatedAt: 2026-08-18T09:52:08Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: amruthpillai/reactive-resume
+    url: https://github.com/amruthpillai/reactive-resume
+    description: A one-of-a-kind resume builder that keeps your privacy in mind.
+      Completely secure, customizable, portable, open-source and free forever.
+      Try it out today!
+    stars: 40932
+    updatedAt: 2026-08-18T09:52:13Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: esengine/DeepSeek-Reasonix
+    url: https://github.com/esengine/DeepSeek-Reasonix
+    description: DeepSeek-native AI coding agent for your terminal. Engineered
+      around prefix-cache stability — leave it running.
+    stars: 34744
+    updatedAt: 2026-08-18T09:48:45Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: volcengine/OpenViking
+    url: https://github.com/volcengine/OpenViking
+    description: Self-evolving Context Database for AI Agents. Unify Agent Memory,
+      Knowledge RAG and Skills.
+    stars: 28991
+    updatedAt: 2026-08-18T09:50:30Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: titanwings/colleague-skill
+    url: https://github.com/titanwings/colleague-skill
+    description: 将冰冷的离别化为温暖的 Skill，欢迎加入数字生命1.0！Transforming cold farewells into warm
+      skills? It's giving rebirth era. Welcome to Digital Life 1.0. 🫶
+    stars: 23290
+    updatedAt: 2026-08-18T09:51:54Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: Nagi-ovo/voyager
+    url: https://github.com/Nagi-ovo/voyager
+    description: Enhancement suite for Gemini, AI Studio, Claude & ChatGPT — plus a
+      prompt manager for any web UI, DeepSeek Harness included. / 面向 Gemini、AI
+      Studio、Claude 与 ChatGPT 的增强套件；提示词管理器可用于任意 Web UI，含 DeepSeek Harness。
+    stars: 19626
+    updatedAt: 2026-08-18T09:44:18Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: tt-a1i/archify
+    url: https://github.com/tt-a1i/archify
+    description: Agent skill for beautiful, verifiable architecture, workflow,
+      sequence, data-flow, and lifecycle diagrams—self-contained HTML with
+      motion and crisp export.
+    stars: 14080
+    updatedAt: 2026-08-18T09:52:13Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: EverMind-AI/EverOS
+    url: https://github.com/EverMind-AI/EverOS
+    description: "One portable memory layer for every AI agent: local-first,
+      Markdown-native, user-owned, and self-evolving across apps, tools, and
+      workflows."
+    stars: 12108
+    updatedAt: 2026-08-18T09:47:17Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: Q00/ouroboros
+    url: https://github.com/Q00/ouroboros
+    description: "Agent OS: the agent gets smarter on its own. We just hold the
+      line: the grading command and expected result never make it into the
+      success contract we hand it. Interview-gated, staged evaluation, budgeted
+      evolution loop. MCP server, 13 runtimes: Claude Code, Codex CLI, Gemini
+      CLI, OpenCode, Copilot, Kiro and more."
+    stars: 5529
+    updatedAt: 2026-08-18T09:27:15Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: ZSeven-W/openpencil
+    url: https://github.com/ZSeven-W/openpencil
+    description: The world's first open-source AI-native vector design tool and the
+      first to feature concurrent Agent Teams. Design-as-Code. Turn prompts into
+      UI directly on the live canvas. A modern alternative to Pencil.
+    stars: 5288
+    updatedAt: 2026-08-18T09:32:13Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: zhu1090093659/dsh-web-ui
+    url: https://github.com/zhu1090093659/dsh-web-ui
+    description: Plugin and skin collection for DeepSeek Harness (DSH) Web UI - task
+      board, git graph, right-side panel, remote mobile UI, pet, live token
+      stats, and skin center.
+    stars: 4412
+    updatedAt: 2026-08-18T09:51:25Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: Devin-AXIS/iPolloWork
+    url: https://github.com/Devin-AXIS/iPolloWork
+    description: A next-generation, source-available AI workspace with a
+      self-evolving agent runtime for editable code, design, presentations,
+      websites, and video—a Codex alternative that integrates DeepSeek Harness
+      for subagent delegation, combining iPolloWork’s complete AI workbench with
+      DSH’s specialized agents and both plugin ecosystems in one workflow.
+    stars: 4141
+    updatedAt: 2026-08-18T09:12:10Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: crafter-station/petdex
+    url: https://github.com/crafter-station/petdex
+    description: A public gallery of animated pets for Codex, Claude Code, DeepSeek
+      Harness, Hermes, OpenCode, Gemini CLI, and more.
+    stars: 3887
+    updatedAt: 2026-08-18T09:14:14Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: xiaobright/dsh-anchored-standard
+    url: https://github.com/xiaobright/dsh-anchored-standard
+    description: "Two-phase DeepSeek Harness preset: Minimal-aligned bootstrap, then
+      full Standard tools (Project2 98/99)"
+    stars: 3506
+    updatedAt: 2026-08-18T09:52:01Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: strukto-ai/mirage
+    url: https://github.com/strukto-ai/mirage
+    description: The World's First Unified Virtual Filesystem For AI Agents
+    stars: 3502
+    updatedAt: 2026-08-18T04:46:51Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: liustack/modlens
+    url: https://github.com/liustack/modlens
+    description: The first vision plugin for DeepSeek Harness, and the vision bridge
+      for every text-only coding agent. Paste an image, get structured JSON
+      evidence (OCR, layout, semantics). | 全网最强 DeepSeek Harness 外挂视觉插件，为
+      DeepSeek、GLM 等纯文本模型外挂视觉能力，粘贴图片即得结构化 JSON 证据（OCR、版面、语义）。
+    stars: 2991
+    updatedAt: 2026-08-18T09:49:40Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: foryourhealth111-pixel/Vibe-Skills
+    url: https://github.com/foryourhealth111-pixel/Vibe-Skills
+    description: VibeSkills is a general-purpose Skill that automatically routes
+      local Skills and intelligently orchestrates harness workflows.
+    stars: 2882
+    updatedAt: 2026-08-18T07:46:45Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: whiteguo233/OpenBiliClaw
+    url: https://github.com/whiteguo233/OpenBiliClaw
+    description: "本地私有、开源的自进化跨平台 AI 内容发现 Agent：先理解你，再主动从
+      B站、小红书、抖音、YouTube、X、知乎、Reddit、微博等平台与开放 Web 寻找内容。（支持 deepseek harness 插件） |
+      Local-first open-source cross-platform AI content discovery agent:
+      understands you, then proactively finds content across Bilibili,
+      Xiaohongshu, Douyin, YouTube, X, Zhihu, Reddit, Weibo and the open
+      web.（support deepseek harness plugin）"
+    stars: 2871
+    updatedAt: 2026-08-18T09:41:34Z
+    foundBy:
+      - topic:dsh-plugin
+      - deepseek harness plugin
+    trust: 待核实
+  - name: imsai-sh/zhuzhiliao
+    url: https://github.com/imsai-sh/zhuzhiliao
+    description: 竹知了 —— 一转就哇哇叫的传统玩具，Web 模拟版。零依赖单文件，真实录音采样，移动端优先。
+    stars: 2834
+    updatedAt: 2026-08-18T09:19:50Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: chuspeeism/dashi-taskboard
+    url: https://github.com/chuspeeism/dashi-taskboard
+    description: ""
+    stars: 2310
+    updatedAt: 2026-08-18T09:39:39Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: omdsh-dev/DSH-better-sidebar
+    url: https://github.com/omdsh-dev/DSH-better-sidebar
+    description: 开放的侧边栏底座，支持三方拓展注册新侧边栏页面。内置文件渲染编辑/终端/Git/子代理页面 ｜ Open sidebar
+      foundation, supports third-party extensions to register new sidebar pages.
+      Built-in file rendering/editing, terminal, Git, and sub-agent pages.
+    stars: 2097
+    updatedAt: 2026-08-18T09:51:29Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: ccch1mneyyy/dsh-TUI
+    url: https://github.com/ccch1mneyyy/dsh-TUI
+    description: "DSH 官方公众号收录的 TUI 补位插件：Claude Code 风，鲸鱼顶栏/实时状态/流式思考/双击 Esc
+      回滚/上下文进度+TPS。npm 一键装。  DSH official WeChat featured TUI plugin — Claude
+      Code style: whale bar, live status, streaming thoughts, double-Esc
+      rollback, context bar + TPS. npm one-click."
+    stars: 1920
+    updatedAt: 2026-08-18T09:50:53Z
+    foundBy:
+      - topic:dsh-plugin
+    trust: 待核实
+  - name: leenkcool/Blue-Whale-Harness
+    url: https://github.com/leenkcool/Blue-Whale-Harness
+    description: DeepSeek-Harness-Plugins
+    stars: 132
+    updatedAt: 2026-08-18T09:43:39Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: ZSeven-W/dsh-openpencil
+    url: https://github.com/ZSeven-W/dsh-openpencil
+    description: The DeepSeek Harness plugin for OpenPencil — preview, inspect, and
+      edit real .op documents inside a conversation.
+    stars: 118
+    updatedAt: 2026-08-18T09:46:06Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: OBdangshang07/DSH_Creative_Workshop
+    url: https://github.com/OBdangshang07/DSH_Creative_Workshop
+    description: Steam-Workshop-inspired discovery, trust, graph search,
+      collections, and transactional installation planning for DeepSeek Harness
+      plugins
+    stars: 60
+    updatedAt: 2026-08-17T15:43:57Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: like-study1/Oh-My-DSH
+    url: https://github.com/like-study1/Oh-My-DSH
+    description: "🐳 DeepSeek Harness 插件聚合社区 — 自动同步 dsh-plugin 生态 · 精选目录 · 每 4
+      小时自动维护 | Oh-My-DSH: a community-maintained catalog of DeepSeek Harness
+      plugins, auto-synced from the dsh-plugin topic"
+    stars: 58
+    updatedAt: 2026-08-18T08:56:32Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: dhicoc/dsh-reverse-skill
+    url: https://github.com/dhicoc/dsh-reverse-skill
+    description: Complete reverse-skill (85 SKILL.md) as a DeepSeek Harness (dsh)
+      Cordis plugin — reverse engineering, authorized pentesting and security
+      research skill pack.
+    stars: 31
+    updatedAt: 2026-08-18T08:49:01Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: oil-oil/build-deepseek-harness-plugin
+    url: https://github.com/oil-oil/build-deepseek-harness-plugin
+    description: Agent skill for installed DeepSeek Harness plugins (slots, Typert
+      remotes, credentials).
+    stars: 29
+    updatedAt: 2026-08-18T09:32:56Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: HiWhaleW/dsh-toolbox
+    url: https://github.com/HiWhaleW/dsh-toolbox
+    description: Local-first DeepSeek Harness plugins for product research, context
+      routing, plugin preflight, and compatibility monitoring.
+    stars: 26
+    updatedAt: 2026-08-15T04:03:16Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: CheshireJCat/blender
+    url: https://github.com/CheshireJCat/blender
+    description: DeepSeek Harness plugin for complete Blender 3D modeling,
+      reconstruction, rendering, validation, and export workflows
+    stars: 17
+    updatedAt: 2026-08-18T08:34:38Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: sugarforever/dsh-lark
+    url: https://github.com/sugarforever/dsh-lark
+    description: DeepSeek Harness Plugin for Lark Integration
+    stars: 15
+    updatedAt: 2026-08-18T05:05:54Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: cpp285/dsh-plugin-center
+    url: https://github.com/cpp285/dsh-plugin-center
+    description: A compact discovery and lifecycle console for DeepSeek Harness plugins.
+    stars: 9
+    updatedAt: 2026-08-18T08:45:42Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: suntianc/dsh-codex-auth
+    url: https://github.com/suntianc/dsh-codex-auth
+    description: DeepSeek Harness plugin that reuses the local Codex CLI ChatGPT
+      login and adds a native GPT Auth settings card
+    stars: 9
+    updatedAt: 2026-08-18T07:57:08Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: KYZHXL/dsh-manager
+    url: https://github.com/KYZHXL/dsh-manager
+    description: DeepSeek Harness plugin marketplace
+    stars: 8
+    updatedAt: 2026-08-17T05:54:46Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: detongz/dsh-client-ui-obsidian-memory
+    url: https://github.com/detongz/dsh-client-ui-obsidian-memory
+    description: deepseek harness plugin obsidian memory
+    stars: 7
+    updatedAt: 2026-08-18T08:25:33Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: Ceelog/dsh-plugins
+    url: https://github.com/Ceelog/dsh-plugins
+    description: deepseek harness plugins
+    stars: 6
+    updatedAt: 2026-08-17T15:21:07Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: R3alloc/dsh-session-deeplink
+    url: https://github.com/R3alloc/dsh-session-deeplink
+    description: DeepSeek Harness plugin for shareable session deep links
+    stars: 6
+    updatedAt: 2026-08-15T00:59:15Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: tensorlakeai/dsh-tensorlake-sandbox
+    url: https://github.com/tensorlakeai/dsh-tensorlake-sandbox
+    description: "A deepseek harness plugin for tensorlake sandbox "
+    stars: 6
+    updatedAt: 2026-08-17T08:55:29Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: fufankeji/deepseek-harness-plugin-image-skin
+    url: https://github.com/fufankeji/deepseek-harness-plugin-image-skin
+    description: Turn any image into an installable DeepSeek Harness Web skin plugin.
+    stars: 4
+    updatedAt: 2026-08-16T06:42:50Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: losebird/dsh-plugin-market
+    url: https://github.com/losebird/dsh-plugin-market
+    description: DeepSeek Harness plugins market｜DSH 插件市场
+    stars: 4
+    updatedAt: 2026-08-18T04:44:24Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: truelove-dreamer/dsh-plugin-vetting
+    url: https://github.com/truelove-dreamer/dsh-plugin-vetting
+    description: "DeepSeek Harness plugin: heuristic malware vetting for installed
+      third-party plugins"
+    stars: 4
+    updatedAt: 2026-08-17T05:56:46Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: wink-run/dsh-plugin-store
+    url: https://github.com/wink-run/dsh-plugin-store
+    description: deepseek harness  plugin store
+    stars: 4
+    updatedAt: 2026-08-18T09:29:00Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: bobleer/deepseek-harness-plugin-mcp
+    url: https://github.com/bobleer/deepseek-harness-plugin-mcp
+    description: "MCP server that lets any agent discover, install, and run DeepSeek
+      Harness plugins (topic: dsh-plugin)."
+    stars: 3
+    updatedAt: 2026-08-17T11:33:08Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: hrhgit/deepseek-harness-plugin-manager
+    url: https://github.com/hrhgit/deepseek-harness-plugin-manager
+    description: "Web plugin manager for DeepSeek Harness (DSH): inspect, search,
+      group, enable, and disable Cordis plugins."
+    stars: 3
+    updatedAt: 2026-08-18T07:11:06Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: Sunrisepeak/dsh-index
+    url: https://github.com/Sunrisepeak/dsh-index
+    description: DeepSeek Harness Plugin and Agent Profile Package Index - Install
+      dsh-plugin with just one command
+    stars: 3
+    updatedAt: 2026-08-17T06:26:26Z
+    foundBy:
+      - deepseek harness plugin
+    trust: 待核实
+  - name: cwbcheng/dsh-knowledge-graph
+    url: https://github.com/cwbcheng/dsh-knowledge-graph
+    description: "DSH Cordis plugin: turn any source text into an AI knowledge graph
+      (facts/inferences/concepts/definitions/examples/counter-examples/rules)
+      with two-way linking between the graph and the original text."
+    stars: 2
+    updatedAt: 2026-08-17T19:24:01Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: jiam9069/dsh-air-outer-relay
+    url: https://github.com/jiam9069/dsh-air-outer-relay
+    description: DSH Cordis plugin for the Air Outer Claude/Codex compatibility relay
+    stars: 1
+    updatedAt: 2026-08-18T04:33:14Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: 8b-is/deepsiper-enthea
+    url: https://github.com/8b-is/deepsiper-enthea
+    description: Sovereign, agent-driven LLM evaluation harness forked from
+      deepseek-harness (dsh) — Cordis plugin architecture, EntheAI backends, and
+      multi-model benchmarking
+    stars: 0
+    updatedAt: 2026-08-18T07:59:12Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: BandieraRosa/dsh-plugin-notion
+    url: https://github.com/BandieraRosa/dsh-plugin-notion
+    description: "DeepSeek Harness (DSH) Cordis plugin: Notion API tools —
+      search/read/create/update/query/append/archive via credentials +
+      subprocess seams"
+    stars: 0
+    updatedAt: 2026-08-16T11:07:03Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: boomzikazita/dsh-cybernetics
+    url: https://github.com/boomzikazita/dsh-cybernetics
+    description: "DeepSeek Harness (dsh) Cordis plugin:
+      observer/feedforward/feedback control loop, stability valve,
+      controllability check"
+    stars: 0
+    updatedAt: 2026-08-17T14:54:46Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: dhicoc/dsh-mcp-plugin
+    url: https://github.com/dhicoc/dsh-mcp-plugin
+    description: "WorkBuddy/CodeBuddy skill: turn any MCP server (stdio/HTTP, any
+      language) into a DeepSeek Harness (dsh) Cordis plugin."
+    stars: 0
+    updatedAt: 2026-08-16T13:12:08Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: dhicoc/skills-to-dsh-plugin
+    url: https://github.com/dhicoc/skills-to-dsh-plugin
+    description: "Zero-dependency converter: package a SKILL.md skill repo into an
+      installable DeepSeek Harness (dsh) Cordis plugin."
+    stars: 0
+    updatedAt: 2026-08-16T02:51:29Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: JachinShen/dsh-sandbox-permission-guard
+    url: https://github.com/JachinShen/dsh-sandbox-permission-guard
+    description: DSH Cordis plugin that prevents redundant sandbox escalation failures
+    stars: 0
+    updatedAt: 2026-08-16T12:44:47Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: omdsh-dev/dsh-tui
+    url: https://github.com/omdsh-dev/dsh-tui
+    description: "Terminal UI front door for DeepSeek Harness (dsh) — Cordis plugin
+      over pi-tui: transcript, tool cards, overlays, slash commands, agent
+      presets, themes."
+    stars: 0
+    updatedAt: 2026-08-17T05:34:55Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: SARTHAK2511/dsh-cve-audit
+    url: https://github.com/SARTHAK2511/dsh-cve-audit
+    description: Live CVE/supply-chain audit for your workspace's own dependencies
+      (npm/pip/go), backed by OSV.dev. A DeepSeek Harness (dsh) Cordis plugin.
+    stars: 0
+    updatedAt: 2026-08-15T20:22:10Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实
+  - name: shiki-dml/dsh-workspace-intelligence
+    url: https://github.com/shiki-dml/dsh-workspace-intelligence
+    description: Standalone DSH/Cordis plugin for deterministic LSP workspace symbol search
+    stars: 0
+    updatedAt: 2026-08-16T11:30:13Z
+    foundBy:
+      - dsh cordis plugin
+    trust: 待核实

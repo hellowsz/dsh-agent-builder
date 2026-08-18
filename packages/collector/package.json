@@ -1,0 +1,22 @@
+{
+  "name": "@dsh-agent-builder/collector",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "开源插件收集器：定时全网筛选 DSH 相关插件，产出面向 AI 检索的清单",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "collect": "tsx src/collect.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8",
+    "tsx": "^4.19.2"
+  }
+}
