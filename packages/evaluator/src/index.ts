@@ -3,10 +3,11 @@
  * 与干活的 agent 完全分离——只看「原文 + 产出 + 评审标准」，逐条给出 通过/不通过 + 理由。
  * 评审 LLM 输出必须是 JSON；解析失败按"评审失败"处理，绝不静默放行。
  */
-import { type AiReviewItem } from '@dsh-agent-builder/gate-engine'
+import { extractJsonRecord, type AiReviewItem } from '@dsh-agent-builder/gate-engine'
 import { type ChatClient } from './llm.js'
 
 export { createDeepSeekClient, type ChatClient, type ChatMessage, type DeepSeekConfig } from './llm.js'
+export { createDshHeadlessClient, type DshHeadlessConfig } from './dsh-client.js'
 
 /** 一条评审结论。 */
 export interface ReviewFinding {
@@ -55,8 +56,9 @@ function buildUserPrompt(input: ReviewInput): string {
 }
 
 function parseFindings(text: string, items: readonly AiReviewItem[]): readonly ReviewFinding[] {
-  const raw: unknown = JSON.parse(text)
-  if (typeof raw !== 'object' || raw === null) throw new Error('评审输出不是对象')
+  // 容错：评审 LLM 可能把 JSON 包在围栏/说明文字里
+  const raw: unknown = extractJsonRecord(text)
+  if (typeof raw !== 'object' || raw === null) throw new Error('评审输出里没有 JSON 对象')
   const findings = (raw as { findings?: unknown }).findings
   if (!Array.isArray(findings)) throw new Error('评审输出缺少 findings 数组')
 

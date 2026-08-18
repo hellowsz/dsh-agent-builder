@@ -2,6 +2,7 @@
  * 对话收敛：用户的白话描述 → TaskSpec 草案（走 LLM）。
  * LLM 只负责起草；草案必须过 validateSpec 这道确定性关卡，过不了就带着问题重试。
  */
+import { extractJsonRecord } from '@dsh-agent-builder/gate-engine'
 import { type ChatClient } from '@dsh-agent-builder/evaluator'
 import { validateSpec, type TaskSpec } from './spec.js'
 
@@ -32,13 +33,13 @@ export async function draftSpec(client: ChatClient, userDescription: string, max
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: feedback === '' ? userDescription : `${userDescription}\n\n上一稿的问题，请修正后重新输出完整 JSON：\n${feedback}` },
     ])
-    let candidate: TaskSpec
-    try {
-      candidate = normalize(JSON.parse(text))
-    } catch (e) {
-      feedback = `JSON 解析失败：${e instanceof Error ? e.message : String(e)}`
+    // 容错：LLM 可能把 JSON 包在围栏/说明文字里
+    const parsed = extractJsonRecord(text)
+    if (parsed === undefined) {
+      feedback = '输出里没有找到 JSON 对象，请只输出规格 JSON'
       continue
     }
+    const candidate: TaskSpec = normalize(parsed)
     const problems = validateSpec(candidate)
     if (problems.length === 0) return candidate
     feedback = problems.join('\n')

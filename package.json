@@ -4,9 +4,16 @@
   "version": "0.0.1",
   "description": "让纯新手用对话搭一个能稳定交付结果的 agent —— 产物是 DeepSeek Harness 配置 + 专属验证门禁",
   "scripts": {
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "verify:real": "tsx scripts/verify-real.mts",
+    "verify:steer": "bash scripts/verify-steer-loop.sh"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@dsh-agent-builder/builder": "workspace:*",
+    "@dsh-agent-builder/evaluator": "workspace:*",
+    "tsx": "^4.19.2"
   }
 }

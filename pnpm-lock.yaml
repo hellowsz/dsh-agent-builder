@@ -6,7 +6,17 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      '@dsh-agent-builder/builder':
+        specifier: workspace:*
+        version: link:packages/builder
+      '@dsh-agent-builder/evaluator':
+        specifier: workspace:*
+        version: link:packages/evaluator
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.12
 
   examples/reimbursement-reference:
     dependencies:
