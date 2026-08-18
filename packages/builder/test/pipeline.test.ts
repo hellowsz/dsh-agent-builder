@@ -45,6 +45,25 @@ describe('draftSpec（假 LLM）', () => {
     const client: ChatClient = { chat: async () => '不是 JSON' }
     await expect(draftSpec(client, 'x', 2)).rejects.toThrow(/仍不合法/)
   })
+
+  it('驼峰字段名被确定性归一为 kebab-case（真模型回归:模型爱输出 camelCase）', async () => {
+    const camel = {
+      ...REIMBURSEMENT_SPEC,
+      name: 'ExpenseHelper',
+      fields: [
+        { name: 'expenseItem', label: '费用项目', kind: 'text' },
+        { name: 'taxAmount', label: '税额', kind: 'number' },
+        { name: 'invoice_no', label: '发票号', kind: 'text' },
+      ],
+      rules: [{ id: 'r1', type: 'compare', left: 'taxAmount', op: '<=', right: 'taxAmount' }],
+      aiReview: [],
+    }
+    const client: ChatClient = { chat: async () => '```json\n' + JSON.stringify(camel) + '\n```' }
+    const spec = await draftSpec(client, 'x')
+    expect(spec.name).toBe('expense-helper')
+    expect(spec.fields.map((f) => f.name)).toEqual(['expense-item', 'tax-amount', 'invoice-no'])
+    expect(spec.rules[0]?.left).toBe('tax-amount')
+  })
 })
 
 describe('稳定性验证 + 固化（假 LLM）', () => {

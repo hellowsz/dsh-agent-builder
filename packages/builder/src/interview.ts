@@ -47,17 +47,25 @@ export async function draftSpec(client: ChatClient, userDescription: string, max
   throw new Error(`规格起草 ${maxAttempts} 次仍不合法：${feedback}`)
 }
 
+/** 驼峰/下划线 → kebab-case（机械可修的命名问题不浪费 LLM 重试）。 */
+function toKebab(s: string): string {
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/_/g, '-')
+    .toLowerCase()
+}
+
 /** 宽松归一：补默认值，剔除非预期字段。 */
 function normalize(raw: unknown): TaskSpec {
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
   const arr = (v: unknown): readonly Record<string, unknown>[] =>
     Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null) : []
   return {
-    name: typeof r.name === 'string' ? r.name : '',
+    name: typeof r.name === 'string' ? toKebab(r.name) : '',
     title: typeof r.title === 'string' ? r.title : '',
     description: typeof r.description === 'string' ? r.description : '',
     fields: arr(r.fields).map((f) => ({
-      name: typeof f.name === 'string' ? f.name : '',
+      name: typeof f.name === 'string' ? toKebab(f.name) : '',
       label: typeof f.label === 'string' ? f.label : String(f.name ?? ''),
       kind: f.kind === 'number' || f.kind === 'date' || f.kind === 'enum' ? f.kind : 'text',
       ...(Array.isArray(f.values) ? { values: f.values.filter((v): v is string => typeof v === 'string') } : {}),
@@ -66,11 +74,11 @@ function normalize(raw: unknown): TaskSpec {
     rules: arr(r.rules).map((x) => ({
       id: typeof x.id === 'string' ? x.id : '',
       type: x.type === 'not-future' ? 'not-future' as const : 'compare' as const,
-      ...(typeof x.left === 'string' ? { left: x.left } : {}),
+      ...(typeof x.left === 'string' ? { left: toKebab(x.left) } : {}),
       ...(x.op === '<=' || x.op === '<' || x.op === '>=' || x.op === '>' || x.op === '==' ? { op: x.op } : {}),
-      ...(typeof x.right === 'string' ? { right: x.right } : {}),
+      ...(typeof x.right === 'string' ? { right: toKebab(x.right) } : {}),
       ...(typeof x.factor === 'number' ? { factor: x.factor } : {}),
-      ...(typeof x.field === 'string' ? { field: x.field } : {}),
+      ...(typeof x.field === 'string' ? { field: toKebab(x.field) } : {}),
     })),
     aiReview: arr(r.aiReview).map((a) => ({
       id: typeof a.id === 'string' ? a.id : '',
