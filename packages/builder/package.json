@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-agent-builder/builder",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "对话式搭建助手：聊需求 → 生成门禁/提示词/DSH preset → 跑样例出稳定性报告 → 固化",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "dsh-agent-builder": "./src/cli.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "cli": "node --experimental-strip-types src/cli.ts"
+  },
+  "dependencies": {
+    "@dsh-agent-builder/evaluator": "workspace:*",
+    "@dsh-agent-builder/gate-engine": "workspace:*",
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

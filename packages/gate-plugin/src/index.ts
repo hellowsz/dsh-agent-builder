@@ -10,8 +10,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
-import { extractJsonRecord } from './extract.js'
+import { extractJsonRecord, parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
 import { buildFeedback, NO_RECORD_FEEDBACK } from './feedback.js'
 
 export const name = 'gate-plugin'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { apply, loadConfig } from '../src/index.js'
-import { extractJsonRecord } from '../src/extract.js'
+import { extractJsonRecord } from '@dsh-agent-builder/gate-engine'
 import { makeHarness, writeGateFile, TEST_GATE_YAML } from './harness.js'
 
 const SOURCE = '发票 号码 INV20260812 金额 428.00 元'
