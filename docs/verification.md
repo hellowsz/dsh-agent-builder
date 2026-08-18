@@ -14,6 +14,7 @@
 | 6 | **steer 打回闭环(真 DSH+真模型)** | `pnpm verify:steer`(暗号法,见下) | ✅ 输出含暗号 GATE-OK-9527 |
 | 7 | ④ 独立评审真模型 | `pnpm verify:real` ① | ✅ 合理产出放行、胡归类+编造备注拦下（2026-08-18） |
 | 8 | builder 端到端真跑 | `pnpm verify:real` ② | ✅ 真起草→真抽取→门禁+评审→固化，2/2 样例符合预期（2026-08-18） |
+| 9 | **运行时 ④ 评审闭环(真 DSH+真模型+真评审子进程)** | `pnpm verify:review`(暗号法) | ✅ 输出含暗号 REVIEW-OK-7788（2026-08-18） |
 
 ## 真环境验证抓出的问题（这就是要做真验证的原因）
 
@@ -41,6 +42,8 @@
 
 最终输出:`{"amount": 428, "confirmation": "GATE-OK-9527"}` —— 闭环铁证。
 
+同法验证了**运行时 ④ 评审闭环**:暗号 `REVIEW-OK-7788` 只写在评审标准(aiReview criteria)里,确定性三层管不到它——最终输出含该暗号,证明"确定性过→评审拦→steer 评审理由→修正→复审放行"在真 DSH 里完整发生(评审由独立的 dsh headless 子进程执行)。
+
 ## 真模型验证通道
 
 真模型调用通过 `createDshHeadlessClient` 走本机 `dsh --profile headless`(DeepSeek 凭证保存在 dsh 自己的凭证库,不经过本项目进程),或设置 `DEEPSEEK_API_KEY` 后走 `createDeepSeekClient` 直连。CI 缺省跳过真 API 测试,不影响绿灯。
@@ -53,4 +56,5 @@ pnpm --filter @dsh-agent-builder/gate-plugin build   # 3
 pnpm --filter @dsh-agent-builder/collector collect   # 4
 pnpm verify:steer     # 6（需本机 dsh 凭证）
 pnpm verify:real      # 7-8（需本机 dsh 凭证）
+pnpm verify:review    # 9（需本机 dsh 凭证）
 ```

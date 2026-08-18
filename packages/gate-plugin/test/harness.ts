@@ -46,7 +46,7 @@ export function makeHarness() {
       data: { message: { content: [{ type: 'text', text }] } },
     })
 
-  const stopTurn = (turn: number) => handlers.get('agent/turn-stopping')!({ agent, turn })
+  const stopTurn = async (turn: number) => await handlers.get('agent/turn-stopping')!({ agent, turn })
 
   return { ctx, agent, steers, logs, emitUser, emitAssistant, stopTurn }
 }

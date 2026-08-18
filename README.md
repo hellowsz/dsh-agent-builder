@@ -36,7 +36,7 @@ pnpm --filter @dsh-agent-builder/gate-plugin build   # 产出自包含 dist/gate
 dsh --patch agents/<name>/<name>.preset.yaml web
 ```
 
-运行时,门禁插件挂在 DSH 的 `agent/turn-stopping` 扩展点:产出不合格 → `agent.steer()` 喂回具体问题重开回合(限次防死循环);合格才放行。
+运行时,门禁插件挂在 DSH 的 `agent/turn-stopping` 扩展点,**四层全部生效**:确定性三层不过 → `agent.steer()` 喂回具体问题重开回合;三层过了再交**独立评审 agent**(dsh headless 子进程,独立会话)做 ④ 软判断,不过同样打回;重试限次防死锁,评审预算耗尽诚实告警放行。
 
 ## 仓库结构
 

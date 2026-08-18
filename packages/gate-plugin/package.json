@@ -12,7 +12,8 @@
     "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node22 --banner:js=\"import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\" --outfile=dist/gate-plugin.mjs"
   },
   "dependencies": {
-    "@dsh-agent-builder/gate-engine": "workspace:*"
+    "@dsh-agent-builder/gate-engine": "workspace:*",
+    "@dsh-agent-builder/evaluator": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

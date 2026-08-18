@@ -41,72 +41,72 @@ describe('loadConfig：配置边界', () => {
 })
 
 describe('运行时拦截流', () => {
-  it('合格产出：放行，不 steer', () => {
+  it('合格产出：放行，不 steer', async () => {
     const h = setup()
     h.emitUser(SOURCE)
     h.emitAssistant(`填好了：\n${GOOD_JSON}`)
-    h.stopTurn(1)
+    await h.stopTurn(1)
     expect(h.steers).toHaveLength(0)
     expect(h.logs.some((l) => l.includes('通过'))).toBe(true)
   })
 
-  it('改数产出：steer 纠正指令，且指出具体问题', () => {
+  it('改数产出：steer 纠正指令，且指出具体问题', async () => {
     const h = setup()
     h.emitUser(SOURCE)
     h.emitAssistant(TAMPERED_JSON)
-    h.stopTurn(1)
+    await h.stopTurn(1)
     expect(h.steers).toHaveLength(1)
     expect(h.steers[0]!.text).toContain('amount')
     expect(h.steers[0]!.text).toContain('找不到依据')
   })
 
-  it('重试后改对：第二次放行', () => {
+  it('重试后改对：第二次放行', async () => {
     const h = setup()
     h.emitUser(SOURCE)
     h.emitAssistant(TAMPERED_JSON)
-    h.stopTurn(1)
+    await h.stopTurn(1)
     h.emitAssistant(GOOD_JSON) // agent 改对了
-    h.stopTurn(1)
+    await h.stopTurn(1)
     expect(h.steers).toHaveLength(1)
     expect(h.logs.some((l) => l.includes('通过'))).toBe(true)
   })
 
-  it('重试用尽：不再 steer，记录警告（防死循环）', () => {
+  it('重试用尽：不再 steer，记录警告（防死循环）', async () => {
     const h = setup(1)
     h.emitUser(SOURCE)
     h.emitAssistant(TAMPERED_JSON)
-    h.stopTurn(1) // 第 1 次拦截，用掉唯一重试
+    await h.stopTurn(1) // 第 1 次拦截，用掉唯一重试
     h.emitAssistant(TAMPERED_JSON)
-    h.stopTurn(1) // 重试用尽
+    await h.stopTurn(1) // 重试用尽
     h.emitAssistant(TAMPERED_JSON)
-    h.stopTurn(1) // 不应再 steer
+    await h.stopTurn(1) // 不应再 steer
     expect(h.steers).toHaveLength(1)
     expect(h.logs.some((l) => l.includes('重试用尽'))).toBe(true)
   })
 
-  it('没有结构化产出：steer 要求补 JSON', () => {
+  it('没有结构化产出：steer 要求补 JSON', async () => {
     const h = setup()
     h.emitUser(SOURCE)
     h.emitAssistant('我整理好了,请查收。')
-    h.stopTurn(1)
+    await h.stopTurn(1)
     expect(h.steers).toHaveLength(1)
     expect(h.steers[0]!.text).toContain('json')
   })
 
-  it('纯工具回合（无 assistant 产出）：不拦', () => {
+  it('纯工具回合（无 assistant 产出）：不拦', async () => {
     const h = setup()
-    h.stopTurn(1)
+    await h.stopTurn(1)
     expect(h.steers).toHaveLength(0)
   })
 
-  it('新回合重置重试预算', () => {
+  it('新回合重置重试预算', async () => {
     const h = setup(1)
     h.emitUser(SOURCE)
     h.emitAssistant(TAMPERED_JSON)
-    h.stopTurn(1)
+    await h.stopTurn(1)
     expect(h.steers).toHaveLength(1)
     h.emitAssistant(TAMPERED_JSON)
-    h.stopTurn(2) // 新回合，重试预算独立
+    await h.stopTurn(2) // 新回合，重试预算独立
     expect(h.steers).toHaveLength(2)
   })
 })

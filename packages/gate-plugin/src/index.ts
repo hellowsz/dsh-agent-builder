@@ -11,12 +11,14 @@
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { extractJsonRecord, parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
-import { buildFeedback, NO_RECORD_FEEDBACK } from './feedback.js'
+import { buildFeedback, buildReviewFeedback, NO_RECORD_FEEDBACK } from './feedback.js'
+import { createReviewer, type ReviewChannelConfig, type Reviewer } from './review-runner.js'
 
 export const name = 'gate-plugin'
+export { createReviewer, type Reviewer, type ReviewChannelConfig } from './review-runner.js'
 
 /** 插件配置。 */
-export interface GatePluginConfig {
+export interface GatePluginConfig extends ReviewChannelConfig {
   /** 门禁文件（YAML）的绝对路径 */
   readonly gateFile: string
   /** 最大重试次数（steer 重开回合的上限），默认 2 */
@@ -88,8 +90,16 @@ export function loadConfig(config: unknown): { gate: GateDefinition; maxRetries:
   return { gate, maxRetries, gateFile: c.gateFile }
 }
 
-/** cordis 入口。 */
+/** cordis 入口：按配置建评审通道（门禁没有 aiReview 条目则不建）。 */
 export function apply(ctx: ContextLike, config: unknown): void {
+  const loaded = loadConfig(config)
+  const reviewer =
+    (loaded.gate.aiReview?.length ?? 0) > 0 ? createReviewer(config as ReviewChannelConfig) : undefined
+  applyCore(ctx, config, reviewer)
+}
+
+/** 核心装配（评审执行器可注入，便于单测）。 */
+export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer): void {
   const { gate, maxRetries, gateFile } = loadConfig(config)
   const states = new WeakMap<SessionLike, SessionState>()
   const log = ctx.logger
@@ -112,7 +122,7 @@ export function apply(ctx: ContextLike, config: unknown): void {
     }
   })
 
-  ctx.on('agent/turn-stopping', ({ agent, turn }) => {
+  ctx.on('agent/turn-stopping', async ({ agent, turn }) => {
     const state = stateOf(agent.session)
     const answer = state.lastAssistant
     if (answer === undefined) return // 本回合没有 assistant 产出（如纯工具回合），不拦
@@ -131,16 +141,39 @@ export function apply(ctx: ContextLike, config: unknown): void {
     }
 
     const verdict = runGate(gate, { record, source: state.source, today: localToday() })
-    if (verdict.passed) {
-      state.retries.delete(turn)
-      log?.info(`[gate] ${gate.name}: 通过（turn ${turn}，检查 ${gate.checks.length} 项，门禁 ${gateFile}）`)
+    if (!verdict.passed) {
+      if (used >= maxRetries) {
+        log?.warn(`[gate] ${gate.name}: 重试用尽仍未通过（turn ${turn}）：${verdict.issues.map((i) => i.code).join(', ')}`)
+        return
+      }
+      state.retries.set(turn, used + 1)
+      agent.steer(steerMessage(buildFeedback(verdict, used + 1, maxRetries)))
       return
     }
-    if (used >= maxRetries) {
-      log?.warn(`[gate] ${gate.name}: 重试用尽仍未通过（turn ${turn}）：${verdict.issues.map((i) => i.code).join(', ')}`)
-      return
+
+    // 确定性三层全过 → ④ 独立评审（若门禁声明了且通道未关）
+    if (reviewer !== undefined && verdict.pendingAiReview.length > 0) {
+      const result = await reviewer({
+        source: state.source ?? '',
+        record,
+        items: verdict.pendingAiReview,
+      })
+      if (!result.passed) {
+        if (used >= maxRetries) {
+          // 重试预算耗尽:诚实告警放行(运行时无限扣住回合会让 agent 卡死,比错误更伤)
+          const why = result.error ?? result.findings.filter((f) => !f.passed).map((f) => f.id).join(', ')
+          log?.warn(`[gate] ${gate.name}: ④评审未过且重试用尽,仅确定性检查把关放行（turn ${turn}）：${why}`)
+          state.retries.delete(turn)
+          return
+        }
+        state.retries.set(turn, used + 1)
+        agent.steer(steerMessage(buildReviewFeedback(result, verdict.pendingAiReview, used + 1, maxRetries)))
+        return
+      }
     }
-    state.retries.set(turn, used + 1)
-    agent.steer(steerMessage(buildFeedback(verdict, used + 1, maxRetries)))
+
+    state.retries.delete(turn)
+    const reviewNote = reviewer !== undefined && verdict.pendingAiReview.length > 0 ? '+④评审' : ''
+    log?.info(`[gate] ${gate.name}: 通过（turn ${turn}，检查 ${gate.checks.length} 项${reviewNote}，门禁 ${gateFile}）`)
   })
 }
