@@ -9,11 +9,10 @@
   },
   "scripts": {
     "test": "vitest run",
-    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node22 --outfile=dist/gate-plugin.mjs"
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node22 --banner:js=\"import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\" --outfile=dist/gate-plugin.mjs"
   },
   "dependencies": {
-    "@dsh-agent-builder/gate-engine": "workspace:*",
-    "@deepseek-ai/dsh-llm": "^0.0.1-rc.1"
+    "@dsh-agent-builder/gate-engine": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

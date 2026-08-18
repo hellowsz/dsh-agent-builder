@@ -9,7 +9,7 @@
  * 每份 preset 配自己的门禁文件。
  */
 import { readFileSync } from 'node:fs'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { randomUUID } from 'node:crypto'
 import { extractJsonRecord, parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
 import { buildFeedback, NO_RECORD_FEEDBACK } from './feedback.js'
 
@@ -63,11 +63,17 @@ function localToday(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-/** 组一条 steer 消息（插件来源，notice 形态）。 */
+/**
+ * 组一条 steer 消息（插件来源，notice 形态）。
+ * 与 DSH 的 createUserMessage 同构（randomUUID 身份 + 冻结），自实现以保持打包产物完全自包含——
+ * 打包内联 @deepseek-ai/dsh-llm 会因其运行时 require('../package.json') 在独立文件里崩。
+ */
 function steerMessage(text: string): unknown {
-  return createUserMessage({
-    content: [{ type: 'text', text }],
-    source: { kind: 'plugin', plugin: name, form: 'notice', summary: '门禁拦截' },
+  return Object.freeze({
+    id: randomUUID(),
+    role: 'user',
+    content: Object.freeze([Object.freeze({ type: 'text', text })]),
+    source: Object.freeze({ kind: 'plugin', plugin: name, form: 'notice', summary: '门禁拦截' }),
   })
 }
 
