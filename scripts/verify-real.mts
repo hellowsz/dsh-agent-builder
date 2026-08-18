@@ -58,6 +58,9 @@ const report = await runStability(
   { workClient: client, reviewClient: client, today: localToday() },
 )
 stdout.write(renderReport(spec, report) + '\n')
+for (const r of report.results) {
+  if (r.reviewError !== undefined) stdout.write(`[诊断] ${r.name} reviewError: ${r.reviewError}\n`)
+}
 check('稳定性:真发票通过', report.results[0]?.ok === true, report.results[0]?.issues.join(','))
 check('稳定性:无关文字被拦', report.results[1]?.ok === true, report.results[1]?.issues.join(','))
 
