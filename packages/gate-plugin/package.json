@@ -1,0 +1,21 @@
+{
+  "name": "@dsh-agent-builder/gate-plugin",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "DSH 运行时门禁插件：agent/turn-stopping 拦截 + 不合格 steer 重试限次",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dsh-agent-builder/gate-engine": "workspace:*",
+    "@deepseek-ai/dsh-llm": "^0.0.1-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
