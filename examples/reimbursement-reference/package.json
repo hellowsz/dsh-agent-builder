@@ -1,0 +1,17 @@
+{
+  "name": "@dsh-agent-builder/reimbursement-reference",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "报销门禁的手写判据（标准答案）+ 声明式门禁文件 + 等价性测试",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dsh-agent-builder/gate-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

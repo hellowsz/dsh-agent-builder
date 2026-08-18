@@ -1,0 +1,29 @@
+# 报销单据整理助手的门禁定义（一 agent 一份）。
+# 手写判据 src/ 是它的"标准答案"，test/equivalence.test.ts 证明两者裁决一致。
+version: 1
+name: reimbursement
+description: 报销单验收：结构 / 规则 / 对照防编造 + AI 评审
+checks:
+  # ① 结构
+  - { id: item_empty, type: required, field: item, message: 费用项目为空 }
+  - { id: amount_not_positive, type: number, field: amount, exclusiveMin: 0, message: 金额必须是大于 0 的数字 }
+  - { id: tax_invalid, type: number, field: tax, min: 0, message: 税额必须是不小于 0 的数字 }
+  - { id: date_malformed, type: date, field: date, message: "开票日期不是合法的 YYYY-MM-DD：{value}" }
+  - { id: invoice_empty, type: required, field: invoiceNo, message: 发票号为空 }
+  - id: category_unknown
+    type: enum
+    field: category
+    values: [餐饮, 交通, 住宿, 办公, 其他]
+    message: "类别不在允许集合内：{value}"
+  # ② 规则
+  - { id: tax_gt_amount, type: compare, left: tax, op: '<=', right: amount, message: 税额不应大于含税金额 }
+  - { id: tax_ratio_implausible, type: compare, left: tax, op: '<=', right: amount, factor: 0.2, dependsOn: [tax_gt_amount], message: 税额占比过高，疑似抽取错误 }
+  - { id: date_in_future, type: not-future, field: date, message: "开票日期（{value}）晚于今天" }
+  # ③ 对照（防编造）
+  - { id: amount_not_grounded, type: number-grounded, field: amount, message: "金额（{value}）在原文里找不到依据，疑似改数或编造" }
+  - { id: tax_not_grounded, type: number-grounded, field: tax, message: "税额（{value}）在原文里找不到依据" }
+  - { id: invoice_not_grounded, type: text-grounded, field: invoiceNo, message: "发票号（{value}）在原文里找不到，疑似编造" }
+  - { id: date_not_grounded, type: date-grounded, field: date, message: "开票日期（{value}）在原文里找不到依据" }
+aiReview:
+  - { id: category_sensible, criteria: 类别归类与费用项目、商户信息是否相符 }
+  - { id: note_sensible, criteria: 备注是否如实概括了商户/场景，没有编造信息 }

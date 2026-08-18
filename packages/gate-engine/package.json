@@ -1,0 +1,20 @@
+{
+  "name": "@dsh-agent-builder/gate-engine",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "通用门禁引擎：声明式门禁文件（一 agent 一份）+ 确定性检查执行器",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
