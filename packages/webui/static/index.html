@@ -46,6 +46,14 @@
   .sub { margin-left:18px; }
   .sub .node { padding:5px 8px 5px 26px; margin-bottom:4px; }
   .sub .node::before { left:9px; top:9px; width:7px; height:7px; }
+  .task { padding:7px 10px; border:1px solid var(--line); border-radius:6px; margin-bottom:5px;
+          background:var(--panel2); cursor:pointer; }
+  .task:hover { border-color:#2b3b4f; }
+  .task.cur { border-color:var(--cyan); }
+  .task .tt { font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .task .ts2 { font-size:10.5px; color:var(--dim); margin-top:2px; display:flex; justify-content:space-between; }
+  .st { padding:0 6px; border-radius:99px; border:1px solid var(--line); }
+  .st.draft { color:var(--amber); } .st.review { color:var(--cyan); } .st.frozen { color:var(--green); }
   .chips { display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 0 18px; }
   .chip { font-size:11px; padding:1px 8px; border:1px solid var(--line); border-radius:99px; color:var(--dim); }
   .chip.ok { color:var(--green); border-color:#1d3a2a; }
@@ -118,6 +126,10 @@
 
   <!-- 流水线 -->
   <aside class="rail">
+    <h3>TASKS</h3>
+    <div class="row" style="margin:0 0 8px"><button id="btnNewTask" style="width:100%">+ 新建搭建任务</button></div>
+    <div id="taskList"></div>
+    <div style="height:14px"></div>
     <h3>PIPELINE</h3>
     <div class="node" id="n1"><div class="t">01 需求起草</div><div class="s" id="n1s">待开始</div></div>
     <div class="link"></div>
@@ -131,7 +143,7 @@
     </div>
     <div class="chips" id="sampleChips"></div>
     <div class="link"></div>
-    <div class="node" id="n4"><div class="t">04 固化交付</div><div class="s" id="n4s">—</div></div>
+    <div class="node" id="n4"><div class="t">04 说明书定稿</div><div class="s" id="n4s">—</div></div>
   </aside>
 
   <!-- 工作区 -->
@@ -150,7 +162,7 @@
     </div>
 
     <div class="panel" id="step2" style="display:none">
-      <div class="cap">confirm — 方案确认</div>
+      <div class="cap">confirm — 拼接说明书确认(方案)</div>
       <div class="body">
         <div id="specView"></div>
         <textarea id="feedback" placeholder="> 要改哪里?大白话写(留空=没意见)"></textarea>
@@ -180,7 +192,7 @@
         <p class="hint" style="margin-top:10px">⚠ 以上样例是 AI 编造的。想更放心,可补充你自己的真实原文再跑一轮(选填):</p>
         <textarea id="extraSamples" placeholder="> 每行一条真实原文(留空跳过)" style="min-height:56px"></textarea>
         <div class="row">
-          <button id="btnFreeze">产物没问题,固化 →</button>
+          <button id="btnFreeze">产物满足需求,说明书定稿 →</button>
           <button class="ghost" id="btnReExplore">带上我的真实样例再跑一轮</button>
           <span class="wait" id="w4">运行中…</span>
         </div>
@@ -192,7 +204,7 @@
     </div>
 
     <div class="panel" id="step5" style="display:none">
-      <div class="cap">done — 固化完成</div>
+      <div class="cap">done — 拼接说明书已定稿</div>
       <div class="body">
         <div id="doneView"></div>
         <div class="row"><button class="ghost" id="btnAgain">再搭一个</button></div>
@@ -222,7 +234,7 @@
 
 <script>
 'use strict';
-let spec = null, report = null, filter = 'all', autoscroll = true;
+let filter = 'all', autoscroll = true;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -360,16 +372,16 @@ function renderReport(r) {
 
 function renderProducts(samples, r) {
   const bySource = {};
-  samples.forEach((s) => { bySource[s.name] = s.source; });
+  (samples || []).forEach((s) => { bySource[s.name] = s.source; });
   const labelOf = {};
-  (spec.fields || []).forEach((f) => { labelOf[f.name] = f.label; });
+  ((task.spec && task.spec.fields) || []).forEach((f) => { labelOf[f.name] = f.label; });
   const cards = r.results.map((x) => {
     let inner = '<p class="hint" style="margin:0 0 4px">输入原文:</p>' +
       '<code class="cmd" style="color:#9db4cc;margin-top:0">' + esc(bySource[x.name] || '') + '</code>';
     if (x.record) {
       const rows = Object.entries(x.record).map(([k, v]) =>
         '<tr><td>' + esc(labelOf[k] || k) + '</td><td>' + esc(v === null ? '(空)' : String(v)) + '</td></tr>').join('');
-      inner += '<p class="hint" style="margin:8px 0 0">最终产物:</p><table>' + rows + '</table>';
+      inner += '<p class="hint" style="margin:8px 0 0">拼出来的乐高(最终产物):</p><table>' + rows + '</table>';
     } else {
       inner += '<p class="hint" style="margin:8px 0 0">最终产物:(被拦下,无产物' + (x.expect === 'block' ? ' — 符合预期,系统拒绝了无关输入' : '') + ')</p>';
     }
@@ -381,16 +393,76 @@ function renderProducts(samples, r) {
   $('productView').innerHTML = cards;
 }
 
+// ── 任务管理 ──
+let task = null; // 当前任务(服务端为准)
+
+async function loadTasks() {
+  const res = await fetch('/api/tasks');
+  const d = await res.json();
+  const list = $('taskList');
+  const stName = { draft: '起草中', review: '待评估', frozen: '已定稿' };
+  list.innerHTML = (d.data.tasks || []).map((t) =>
+    '<div class="task' + (task && task.id === t.id ? ' cur' : '') + '" data-id="' + t.id + '">' +
+    '<div class="tt">' + esc(t.title) + '</div>' +
+    '<div class="ts2"><span>' + t.updatedAt.slice(5, 16).replace('T', ' ') + '</span>' +
+    '<span class="st ' + t.status + '">' + stName[t.status] + '</span></div></div>').join('') || '<p class="hint">还没有任务</p>';
+  list.querySelectorAll('.task').forEach((el) => { el.onclick = () => openTask(el.dataset.id); });
+}
+
+function renderFrozen(f) {
+  $('doneView').innerHTML =
+    '<p class="ok-t">说明书与配套产物:</p><code class="cmd">' + esc(f.dir) + '</code>' +
+    '<ul class="plan">' + f.files.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul>' +
+    '<p class="hint">按说明书拼装(终端执行后开 http://127.0.0.1:3080,直接贴原文即可):</p>' +
+    '<code class="cmd">' + esc(f.dshCommand) + '</code>' +
+    '<p class="hint">运行时每次产出都过四层门禁:不合格自动打回重做,重试用尽如实告知。</p>';
+}
+
+function resetPipeline() {
+  ['n1','n2','n3','n4'].forEach((i) => setNode(i, null, '—'));
+  resetSub(); $('subflow').style.display = 'none'; chipsBox.innerHTML = '';
+}
+
+// 按任务状态恢复界面
+function resume() {
+  resetPipeline();
+  $('desc').value = task ? task.description : '';
+  if (!task) { setNode('n1', null, '待开始'); show(1); return; }
+  if (task.spec) { renderSpec(task.spec); setNode('n1', 'ok', task.spec.name); }
+  if (task.status === 'draft') {
+    if (task.spec) { setNode('n2', 'run', '等你确认'); show(2); }
+    else { setNode('n1', null, '待起草'); show(1); }
+  } else if (task.status === 'review') {
+    setNode('n2', 'ok', '已确认');
+    renderReport(task.report); renderProducts(task.samples, task.report);
+    setNode('n3', task.report.matchRate === 1 ? 'ok' : 'fail', Math.round(task.report.matchRate * 100) + '% 符合预期');
+    setNode('n4', 'run', '等你评估定稿'); show(4);
+  } else if (task.status === 'frozen') {
+    setNode('n2', 'ok', '已确认');
+    if (task.report) { renderReport(task.report); renderProducts(task.samples, task.report); setNode('n3', 'ok', '已验证'); }
+    renderFrozen(task.frozen); setNode('n4', 'ok', '已定稿'); show(5);
+  }
+  loadTasks();
+}
+
+async function openTask(id) {
+  const res = await fetch('/api/task?id=' + encodeURIComponent(id));
+  const d = await res.json();
+  if (d.ok) { task = d.data.task; resume(); }
+}
+
+$('btnNewTask').onclick = () => { task = null; resume(); };
+
+// ── 向导动作 ──
 $('btnDraft').onclick = async () => {
   const description = $('desc').value.trim();
   if (!description) return fail(1, '请先写一句描述');
   wait(1, true); $('btnDraft').disabled = true; busyState(true, 'drafting');
-  setNode('n1', 'run', '起草中…');
+  setNode('n1', 'run', '起草说明书…');
   try {
-    spec = (await api('/api/draft', { description })).spec;
-    renderSpec(spec);
-    setNode('n1', 'ok', spec.name); setNode('n2', 'run', '等你确认');
-    show(2);
+    if (!task) task = (await api('/api/tasks', { description })).task;
+    task = (await api('/api/draft', { taskId: task.id })).task;
+    resume();
   } catch (e) { fail(1, e.message); setNode('n1', 'fail', '失败'); }
   finally { wait(1, false); $('btnDraft').disabled = false; busyState(false); }
 };
@@ -398,33 +470,25 @@ $('btnDraft').onclick = async () => {
 $('btnRevise').onclick = async () => {
   const feedback = $('feedback').value.trim();
   if (!feedback) return fail(2, '请先写修改意见,或直接点确认');
-  wait(2, true); busyState(true, 'revising'); setNode('n1', 'run', '按意见重整…');
+  wait(2, true); busyState(true, 'revising'); setNode('n1', 'run', '按意见修订…');
   try {
-    spec = (await api('/api/draft', { description: $('desc').value.trim(), feedback })).spec;
-    renderSpec(spec); $('feedback').value = '';
-    setNode('n1', 'ok', spec.name);
+    task = (await api('/api/draft', { taskId: task.id, feedback })).task;
+    $('feedback').value = ''; resume();
   } catch (e) { fail(2, e.message); }
   finally { wait(2, false); busyState(false); }
 };
 
-// 自动探索:确认方案即触发,无需用户出题
 async function runExplore(extra) {
   show(3); wait(3, true); busyState(true, 'exploring');
   chipsBox.innerHTML = ''; resetSub(); $('subflow').style.display = 'none';
-  setNode('n3', 'run', 'AI 自造样例并试跑中…');
+  setNode('n3', 'run', 'AI 自造样例并拼装中…');
   try {
-    const body = { spec };
+    const body = { taskId: task.id };
     if (extra && extra.length) body.samples = extra.map((source) => ({ source }));
-    const d = await api('/api/explore', body);
-    report = d.report; exploreSamples = d.samples;
-    renderReport(report); renderProducts(exploreSamples, report);
-    setNode('n3', report.matchRate === 1 ? 'ok' : 'fail', Math.round(report.matchRate * 100) + '% 符合预期');
-    setNode('n4', 'run', '等你确认产物'); show(4);
-  } catch (e) {
-    fail(3, e.message); setNode('n3', 'fail', '失败');
-  } finally { wait(3, false); busyState(false); }
+    task = (await api('/api/explore', body)).task;
+    resume();
+  } catch (e) { fail(3, e.message); setNode('n3', 'fail', '失败'); busyState(false); wait(3, false); }
 }
-let exploreSamples = [];
 
 $('btnConfirm').onclick = () => { setNode('n2', 'ok', '已确认'); runExplore(); };
 
@@ -436,38 +500,28 @@ $('btnReExplore').onclick = () => {
 $('btnFixSpec').onclick = async () => {
   const feedback = $('outputFeedback').value.trim();
   if (!feedback) return fail(4, '请先写产物哪里不对');
-  wait(4, true); busyState(true, 'revising'); setNode('n1', 'run', '按产物意见改方案…');
+  wait(4, true); busyState(true, 'revising'); setNode('n1', 'run', '按产物意见修订说明书…');
   try {
-    spec = (await api('/api/draft', { description: $('desc').value.trim(), feedback })).spec;
-    renderSpec(spec); $('outputFeedback').value = '';
-    setNode('n1', 'ok', spec.name); setNode('n2', 'ok', '已按意见更新');
+    task = (await api('/api/draft', { taskId: task.id, feedback })).task;
+    $('outputFeedback').value = '';
     await runExplore();
   } catch (e) { fail(4, e.message); }
   finally { wait(4, false); busyState(false); }
 };
 
 $('btnFreeze').onclick = async () => {
-  wait(4, true); $('btnFreeze').disabled = true; busyState(true, 'freezing'); setNode('n4', 'run', '固化中…');
+  wait(4, true); $('btnFreeze').disabled = true; busyState(true, 'freezing'); setNode('n4', 'run', '定稿中…');
   try {
-    const d = await api('/api/freeze', { spec, report });
-    $('doneView').innerHTML =
-      '<p class="ok-t">产物目录:</p><code class="cmd">' + esc(d.dir) + '</code>' +
-      '<ul class="plan">' + d.files.map((f) => '<li>' + esc(f) + '</li>').join('') + '</ul>' +
-      '<p class="hint">在 DeepSeek Harness 里启动(终端执行后开 http://127.0.0.1:3080,直接贴原文即可,提示词已自动注入):</p>' +
-      '<code class="cmd">' + esc(d.dshCommand) + '</code>' +
-      '<p class="hint">运行时每次产出都过四层门禁:不合格自动打回重做,重试用尽如实告知。</p>';
-    setNode('n4', 'ok', '已交付'); show(5);
+    task = (await api('/api/freeze', { taskId: task.id })).task;
+    resume();
   } catch (e) { fail(4, e.message); setNode('n4', 'fail', '失败'); }
   finally { wait(4, false); $('btnFreeze').disabled = false; busyState(false); }
 };
 
-$('btnAgain').onclick = () => {
-  spec = null; report = null; exploreSamples = [];
-  $('desc').value = ''; $('extraSamples').value = ''; $('outputFeedback').value = '';
-  ['n1','n2','n3','n4'].forEach((i) => setNode(i, null, '—'));
-  setNode('n1', null, '待开始'); resetSub(); $('subflow').style.display = 'none'; chipsBox.innerHTML = '';
-  show(1);
-};
+$('btnAgain').onclick = () => { task = null; resume(); };
+
+loadTasks();
+resume();
 </script>
 </body>
 </html>

@@ -8,3 +8,7 @@ build/
 !.env.example
 .cache/
 tmp/
+
+# 运行数据(任务会话与固化产物)
+sessions/
+agents/

@@ -37,7 +37,8 @@ const reviewClient: ChatClient = {
 }
 
 const outDir = mkdtempSync(join(tmpdir(), 'webui-out-'))
-const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs' })
+const sessionsDir = mkdtempSync(join(tmpdir(), 'webui-sessions-'))
+const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs', sessionsDir })
 let base = ''
 
 beforeAll(async () => {
@@ -51,7 +52,9 @@ async function post(path: string, body: unknown) {
   return { status: res.status, body: (await res.json()) as { ok: boolean; data?: never; error?: string } }
 }
 
-describe('webui 服务', () => {
+describe('webui 服务(任务制)', () => {
+  let taskId = ''
+
   it('GET / 返回向导页', async () => {
     const res = await fetch(base + '/')
     expect(res.status).toBe(200)
@@ -62,67 +65,75 @@ describe('webui 服务', () => {
     expect(html).toContain('/api/events')
   })
 
-  it('draft:描述 → 规格', async () => {
-    const r = await post('/api/draft', { description: '帮我整理' })
+  it('新建任务并列表可见', async () => {
+    const r = await post('/api/tasks', { description: '帮我整理报销' })
     expect(r.status).toBe(200)
-    expect((r.body.data as { spec: { name: string } }).spec.name).toBe('demo-sorter')
+    const task = (r.body.data as { task: { id: string; status: string } }).task
+    taskId = task.id
+    expect(task.status).toBe('draft')
+    const list = await fetch(base + '/api/tasks').then((x) => x.json()) as { data: { tasks: Array<{ id: string }> } }
+    expect(list.data.tasks.some((t) => t.id === taskId)).toBe(true)
   })
 
-  it('draft:空描述 400', async () => {
-    const r = await post('/api/draft', { description: ' ' })
-    expect(r.status).toBe(400)
-    expect(r.body.error).toContain('描述')
-  })
-
-  it('verify:规格+样例 → 报告(含④评审)', async () => {
-    const r = await post('/api/verify', { spec: SPEC, samples: [{ source: '午餐 金额 428 元' }] })
-    expect(r.status).toBe(200)
-    const report = (r.body.data as { report: { matchRate: number } }).report
-    expect(report.matchRate).toBe(1)
-  })
-
-  it('verify:非法规格 400(前端数据不可信)', async () => {
-    const r = await post('/api/verify', { spec: { ...SPEC, name: 'Bad Name' }, samples: [{ source: 'x' }] })
-    expect(r.status).toBe(400)
-    expect(r.body.error).toContain('规格不合法')
-  })
-
-  it('verify:空样例 400', async () => {
-    const r = await post('/api/verify', { spec: SPEC, samples: [] })
+  it('空描述建任务 400', async () => {
+    const r = await post('/api/tasks', { description: ' ' })
     expect(r.status).toBe(400)
   })
 
-  it('freeze:落盘五件套并给出 dsh 命令', async () => {
-    const v = await post('/api/verify', { spec: SPEC, samples: [{ source: '午餐 金额 428 元' }] })
-    const report = (v.body.data as { report: unknown }).report
-    const r = await post('/api/freeze', { spec: SPEC, report })
+  it('draft:起草说明书,存回任务', async () => {
+    const r = await post('/api/draft', { taskId })
     expect(r.status).toBe(200)
-    const data = r.body.data as { dir: string; files: string[]; dshCommand: string }
-    expect(data.files).toHaveLength(5)
-    expect(existsSync(join(data.dir, 'demo-sorter.gate.yaml'))).toBe(true)
-    expect(data.dshCommand).toContain('--profile web')
+    const task = (r.body.data as { task: { spec: { name: string }; title: string } }).task
+    expect(task.spec.name).toBe('demo-sorter')
+    expect(task.title).toBe('演示整理助手')
   })
 
-  it('freeze:缺报告 400', async () => {
-    const r = await post('/api/freeze', { spec: SPEC })
+  it('explore:自造样例跑全链路,产物随任务返回', async () => {
+    const r = await post('/api/explore', { taskId })
+    expect(r.status).toBe(200)
+    const task = (r.body.data as { task: { status: string; samples: Array<{ expect: string }>; report: { matchRate: number; results: Array<{ record?: unknown }> } } }).task
+    expect(task.status).toBe('review')
+    expect(task.samples.map((x) => x.expect)).toEqual(['pass', 'pass', 'block'])
+    expect(task.report.matchRate).toBe(1)
+    expect(task.report.results[0]!.record).toMatchObject({ amount: 428 })
+  })
+
+  it('explore:可附加用户真实样例', async () => {
+    const r = await post('/api/explore', { taskId, samples: [{ source: '午餐 金额 428 元' }] })
+    const task = (r.body.data as { task: { samples: Array<{ name: string }> } }).task
+    expect(task.samples.some((x) => x.name === '真实样例1')).toBe(true)
+  })
+
+  it('freeze:说明书定稿,任务变 frozen', async () => {
+    const r = await post('/api/freeze', { taskId })
+    expect(r.status).toBe(200)
+    const task = (r.body.data as { task: { status: string; frozen: { files: string[] } } }).task
+    expect(task.status).toBe('frozen')
+    expect(task.frozen.files).toHaveLength(5)
+    expect(existsSync(join(outDir, 'demo-sorter', 'demo-sorter.gate.yaml'))).toBe(true)
+  })
+
+  it('持久化:新 TaskStore 从同一目录能恢复任务', async () => {
+    const { TaskStore } = await import('../src/tasks.js')
+    const store2 = new TaskStore(sessionsDir)
+    const revived = store2.get(taskId)
+    expect(revived.status).toBe('frozen')
+    expect(revived.spec?.name).toBe('demo-sorter')
+    expect(revived.report?.matchRate).toBe(1)
+  })
+
+  it('draft:任务不存在报错', async () => {
+    const r = await post('/api/draft', { taskId: 'task-nope' })
     expect(r.status).toBe(400)
-    expect(r.body.error).toContain('报告')
+    expect(r.body.error).toContain('任务不存在')
   })
 
-  it('explore:自动探索——AI 自造样例跑全链路,产物随报告返回', async () => {
-    const r = await post('/api/explore', { spec: SPEC })
-    expect(r.status).toBe(200)
-    const data = r.body.data as { samples: Array<{ name: string; expect: string }>; report: { matchRate: number; results: Array<{ record?: unknown }> } }
-    expect(data.samples.map((x) => x.expect)).toEqual(['pass', 'pass', 'block'])
-    expect(data.report.matchRate).toBe(1)
-    expect(data.report.results[0]!.record).toMatchObject({ amount: 428 })
-    expect(data.report.results[2]!.record).toBeUndefined() // 反例被拦,无产物
-  })
-
-  it('explore:可附加用户真实样例一起跑', async () => {
-    const r = await post('/api/explore', { spec: SPEC, samples: [{ source: '午餐 金额 428 元' }] })
-    const data = r.body.data as { samples: Array<{ name: string }> }
-    expect(data.samples.some((x) => x.name === '真实样例1')).toBe(true)
+  it('explore:未起草先探索报错', async () => {
+    const created = await post('/api/tasks', { description: '另一个任务' })
+    const id = (created.body.data as { task: { id: string } }).task.id
+    const r = await post('/api/explore', { taskId: id })
+    expect(r.status).toBe(400)
+    expect(r.body.error).toContain('先起草')
   })
 
   it('未知路径 404', async () => {
@@ -130,14 +141,15 @@ describe('webui 服务', () => {
     expect(r.status).toBe(404)
   })
 
-  it('日志可查:/api/logs 记录流程与 LLM 调用', async () => {
-    await post('/api/draft', { description: '帮我整理' })
+  it('日志可查:/api/logs 记录任务与流水线', async () => {
     const res = await fetch(base + '/api/logs')
     const { data } = (await res.json()) as { data: { logs: Array<{ tag: string; msg: string }> } }
     const tags = data.logs.map((l) => l.tag)
+    expect(tags).toContain('task')
     expect(tags).toContain('draft')
     expect(tags).toContain('llm')
-    expect(data.logs.some((l) => l.msg.includes('规格就绪'))).toBe(true)
+    expect(data.logs.some((l) => l.tag === 'gate' && l.msg.includes('门禁通过'))).toBe(true)
+    expect(data.logs.some((l) => l.msg.includes('定稿'))).toBe(true)
   })
 
   it('SSE:/api/events 是事件流并回放历史', async () => {
@@ -150,14 +162,5 @@ describe('webui 服务', () => {
     expect(text).toContain('data: ')
     expect(text).toContain('服务就绪')
     controller.abort()
-  })
-
-  it('verify 过程产生 gate/review 流水线日志', async () => {
-    await post('/api/verify', { spec: SPEC, samples: [{ source: '午餐 金额 428 元' }] })
-    const res = await fetch(base + '/api/logs')
-    const { data } = (await res.json()) as { data: { logs: Array<{ tag: string; msg: string }> } }
-    expect(data.logs.some((l) => l.tag === 'gate' && l.msg.includes('门禁通过'))).toBe(true)
-    expect(data.logs.some((l) => l.tag === 'review' && l.msg.includes('④评审通过'))).toBe(true)
-    expect(data.logs.some((l) => l.tag === 'verify' && l.msg.includes('符合预期'))).toBe(true)
   })
 })

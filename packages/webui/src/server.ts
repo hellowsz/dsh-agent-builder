@@ -20,6 +20,7 @@ import {
   type TaskSpec,
 } from '@dsh-agent-builder/builder'
 import { LogBus } from './logbus.js'
+import { TaskStore } from './tasks.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const MAX_BODY = 256 * 1024
@@ -33,6 +34,8 @@ export interface WebuiOptions {
   readonly outDir?: string
   /** gate-plugin 单文件产物路径(默认 packages/gate-plugin/dist) */
   readonly pluginPath?: string
+  /** 任务持久化目录(默认仓库根 sessions/) */
+  readonly sessionsDir?: string
 }
 
 interface Envelope {
@@ -132,7 +135,8 @@ export function createWebuiServer(options: WebuiOptions): Server {
   const bus = new LogBus()
   const workClient = loggingClient(options.workClient, '工作agent', bus)
   const reviewClient = loggingClient(options.reviewClient, '评审agent', bus)
-  bus.log('info', 'sys', '服务就绪')
+  const store = new TaskStore(options.sessionsDir ?? resolve(here, '../../../sessions'))
+  bus.log('info', 'sys', `服务就绪(已加载 ${store.list().length} 个历史任务)`)
 
   return createServer((req, res) => {
     void handle(req, res).catch((e: unknown) => {
@@ -155,6 +159,18 @@ export function createWebuiServer(options: WebuiOptions): Server {
       send(res, 200, { ok: true, data: { logs: bus.history() } })
       return
     }
+    if (req.method === 'GET' && url === '/api/tasks') {
+      send(res, 200, { ok: true, data: { tasks: store.list() } })
+      return
+    }
+    if (req.method === 'GET' && url.startsWith('/api/task?id=')) {
+      try {
+        send(res, 200, { ok: true, data: { task: store.get(decodeURIComponent(url.slice('/api/task?id='.length))) } })
+      } catch (e) {
+        send(res, 404, { ok: false, error: e instanceof Error ? e.message : String(e) })
+      }
+      return
+    }
     if (req.method !== 'POST' || !url.startsWith('/api/')) {
       send(res, 404, { ok: false, error: '不存在的路径' })
       return
@@ -170,28 +186,38 @@ export function createWebuiServer(options: WebuiOptions): Server {
 
     try {
       switch (url) {
-        case '/api/draft': {
+        case '/api/tasks': { // POST 新建任务
           const description = typeof body.description === 'string' ? body.description.trim() : ''
           if (description === '') throw new Error('请先用一句话描述你要什么')
+          const task = store.create(description)
+          bus.log('info', 'task', `新建任务:${task.title}`, { id: task.id })
+          send(res, 200, { ok: true, data: { task } })
+          return
+        }
+        case '/api/draft': {
+          const task = store.get(typeof body.taskId === 'string' ? body.taskId : '')
           const feedback = typeof body.feedback === 'string' ? body.feedback.trim() : ''
-          const prompt = feedback === '' ? description : `${description}\n\n用户的修改意见：${feedback}`
-          bus.log('info', 'draft', feedback === '' ? '开始整理需求' : '按修改意见重新整理')
+          const prompt = feedback === '' ? task.description : `${task.description}\n\n用户的修改意见：${feedback}`
+          bus.log('info', 'draft', `[${task.title}] ${feedback === '' ? '起草拼接说明书' : '按意见修订说明书'}`)
           const spec = await draftSpec(workClient, prompt)
-          bus.log('ok', 'draft', `规格就绪:${spec.name}(${spec.fields.length} 字段/${spec.rules.length} 规则/${spec.aiReview.length} 评审项)`, { spec })
-          send(res, 200, { ok: true, data: { spec } })
+          const updated = store.update(task.id, { spec, title: spec.title, status: 'draft' })
+          bus.log('ok', 'draft', `[${spec.title}] 说明书草案就绪(${spec.fields.length} 字段/${spec.rules.length} 规则/${spec.aiReview.length} 评审项)`, { spec })
+          send(res, 200, { ok: true, data: { task: updated } })
           return
         }
         case '/api/explore': {
-          const spec = parseSpec(body.spec)
+          const task = store.get(typeof body.taskId === 'string' ? body.taskId : '')
+          if (task.spec === undefined) throw new Error('先起草并确认说明书')
+          const spec = parseSpec(task.spec)
           const extra = parseSamples(body.samples, false)
-          bus.log('info', 'explore', '样例自探索:AI 正在编造真实感样例(正例+无关反例)')
+          bus.log('info', 'explore', `[${task.title}] 样例自探索:AI 编造真实感样例(正例+无关反例)`)
           const generated = await generateSamples(workClient, spec, 2)
           const samples = [...generated, ...extra]
           bus.log('ok', 'explore',
-            `样例就绪:${generated.length} 条自造${extra.length > 0 ? ` + ${extra.length} 条用户真实样例` : ''}`,
+            `[${task.title}] 样例就绪:${generated.length} 条自造${extra.length > 0 ? ` + ${extra.length} 条用户真实样例` : ''}`,
             { samples: samples.map((x) => ({ name: x.name, expect: x.expect, source: x.source })) })
           const gate = deriveGate(spec)
-          bus.log('info', 'verify', `稳定性验证开始:${samples.length} 个样例,门禁 ${gate.checks.length} 项检查`)
+          bus.log('info', 'verify', `[${task.title}] 用 DeepSeek Harness 流水线拼装:${samples.length} 个样例,门禁 ${gate.checks.length} 项检查`)
           const report = await runStability(spec, gate, samples, {
             workClient,
             reviewClient,
@@ -199,39 +225,24 @@ export function createWebuiServer(options: WebuiOptions): Server {
             onEvent: pipelineLog(bus),
           })
           bus.log(report.matchRate === 1 ? 'ok' : 'warn', 'verify',
-            `稳定性验证结束:${report.matched}/${report.total} 符合预期`)
-          send(res, 200, { ok: true, data: { samples, report } })
-          return
-        }
-        case '/api/verify': {
-          const spec = parseSpec(body.spec)
-          const samples = parseSamples(body.samples, true)
-          const gate = deriveGate(spec)
-          bus.log('info', 'verify', `稳定性验证开始:${samples.length} 个样例,门禁 ${gate.checks.length} 项检查`)
-          const report = await runStability(spec, gate, samples, {
-            workClient,
-            reviewClient,
-            today: localToday(),
-            onEvent: pipelineLog(bus),
-          })
-          bus.log(report.matchRate === 1 ? 'ok' : 'warn', 'verify',
-            `稳定性验证结束:${report.matched}/${report.total} 符合预期`)
-          send(res, 200, { ok: true, data: { report } })
+            `[${task.title}] 拼装完成:${report.matched}/${report.total} 符合预期,等你评估产物`)
+          const updated = store.update(task.id, { samples, report, status: 'review' })
+          send(res, 200, { ok: true, data: { task: updated } })
           return
         }
         case '/api/freeze': {
-          const spec = parseSpec(body.spec)
-          const report = body.report as StabilityReport
-          if (typeof report !== 'object' || report === null || !Array.isArray(report.results)) {
-            throw new Error('缺少稳定性报告,请先完成验证')
-          }
-          const result = freeze(spec, report, outDir, {
+          const task = store.get(typeof body.taskId === 'string' ? body.taskId : '')
+          if (task.spec === undefined || task.report === undefined) throw new Error('先完成探索验证再定稿')
+          const spec = parseSpec(task.spec)
+          const result = freeze(spec, task.report, outDir, {
             pluginPath,
             gateFilePath: join(outDir, spec.name, `${spec.name}.gate.yaml`),
           })
           const dshCommand = `npx -y @deepseek-ai/dsh --patch ${result.dir}/${spec.name}.preset.yaml --profile web --port 3080`
-          bus.log('ok', 'freeze', `固化完成:${result.dir}(${result.files.length} 个文件)`, { files: result.files })
-          send(res, 200, { ok: true, data: { dir: result.dir, files: result.files, dshCommand } })
+          const frozen = { dir: result.dir, files: result.files, dshCommand }
+          const updated = store.update(task.id, { frozen, status: 'frozen' })
+          bus.log('ok', 'freeze', `[${task.title}] 拼接说明书已定稿:${result.dir}(${result.files.length} 个文件)`, { files: result.files })
+          send(res, 200, { ok: true, data: { task: updated } })
           return
         }
         default:
