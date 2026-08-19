@@ -2,7 +2,7 @@
  * 插件清单：条目模型、筛选、去重、合并与渲染。
  * 清单面向 AI 检索——字段齐、来源明、可信度标注诚实（收集≠可信，默认"待核实"）。
  */
-import { stringify } from 'yaml'
+import { parse, stringify } from 'yaml'
 
 /** 一条候选插件（来自公开仓库检索）。 */
 export interface RepoCandidate {
@@ -20,6 +20,10 @@ export interface CatalogEntry extends RepoCandidate {
   readonly foundBy: readonly string[]
   /** 可信度：收集器只做机械筛选，一律"待核实"；人工/AI 核验后才升级 */
   readonly trust: '待核实' | '已核验'
+  /** 首次被收录的时间（ISO），跨天累积用 */
+  readonly firstSeen?: string
+  /** 最近一次被收录/刷新的时间（ISO） */
+  readonly lastSeen?: string
 }
 
 export interface FilterOptions {
@@ -77,7 +81,7 @@ export function renderCatalog(entries: readonly CatalogEntry[], generatedAt: str
   return stringify({
     version: 1,
     generatedAt,
-    note: '本清单由收集器机械筛选生成；trust=待核实 表示未经人工/AI 核验，接入前必须自行确认插件行为与安全性。',
+    note: '本清单由收集器每日定时机械筛选生成；trust=待核实 表示未经人工/AI 核验，接入前必须自行确认插件行为与安全性。',
     count: entries.length,
     plugins: entries.map((e) => ({
       name: e.fullName,
@@ -87,6 +91,63 @@ export function renderCatalog(entries: readonly CatalogEntry[], generatedAt: str
       updatedAt: e.updatedAt,
       foundBy: [...e.foundBy],
       trust: e.trust,
+      ...(e.firstSeen !== undefined ? { firstSeen: e.firstSeen } : {}),
+      ...(e.lastSeen !== undefined ? { lastSeen: e.lastSeen } : {}),
     })),
   })
+}
+
+/** 反解析已有清单（跨天累积用）。文件损坏/缺字段则忽略该条。 */
+export function parseCatalog(yamlText: string): readonly CatalogEntry[] {
+  let raw: unknown
+  try {
+    raw = parse(yamlText)
+  } catch {
+    return []
+  }
+  const plugins = (raw as { plugins?: unknown })?.plugins
+  if (!Array.isArray(plugins)) return []
+  return plugins.flatMap((p): CatalogEntry[] => {
+    if (typeof p !== 'object' || p === null) return []
+    const o = p as Record<string, unknown>
+    if (typeof o.name !== 'string' || typeof o.url !== 'string') return []
+    return [{
+      fullName: o.name,
+      url: o.url,
+      description: typeof o.description === 'string' ? o.description : '',
+      stars: typeof o.stars === 'number' ? o.stars : 0,
+      updatedAt: typeof o.updatedAt === 'string' ? o.updatedAt : '',
+      foundBy: Array.isArray(o.foundBy) ? o.foundBy.filter((x): x is string => typeof x === 'string') : [],
+      trust: o.trust === '已核验' ? '已核验' : '待核实',
+      ...(typeof o.firstSeen === 'string' ? { firstSeen: o.firstSeen } : {}),
+      ...(typeof o.lastSeen === 'string' ? { lastSeen: o.lastSeen } : {}),
+    }]
+  })
+}
+
+/**
+ * 跨轮累积合并：以本轮结果刷新已有条目（star/描述/来源/lastSeen），
+ * 新条目补 firstSeen；本轮没命中的旧条目保留（生态是累积的，不因某天搜不到就丢）。
+ * 人工升级的 trust=已核验 不被机械结果覆盖。
+ */
+export function accumulate(
+  previous: readonly CatalogEntry[],
+  current: readonly CatalogEntry[],
+  nowIso: string,
+): readonly CatalogEntry[] {
+  const prev = new Map(previous.map((e) => [e.fullName, e]))
+  const merged = new Map<string, CatalogEntry>()
+  for (const c of current) {
+    const old = prev.get(c.fullName)
+    merged.set(c.fullName, {
+      ...c,
+      trust: old?.trust === '已核验' ? '已核验' : c.trust,
+      firstSeen: old?.firstSeen ?? nowIso,
+      lastSeen: nowIso,
+    })
+  }
+  for (const [name, old] of prev) {
+    if (!merged.has(name)) merged.set(name, old) // 本轮没搜到，保留旧记录
+  }
+  return [...merged.values()].sort((a, b) => b.stars - a.stars || a.fullName.localeCompare(b.fullName))
 }

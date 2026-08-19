@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { filterCandidates, looksLikePlugin, mergeCandidates, renderCatalog, type RepoCandidate } from '../src/catalog.js'
-import { parseGhOutput } from '../src/github.js'
+import { parseRestSearch } from '../src/github.js'
 
 const NOW = new Date('2026-08-18T00:00:00Z')
 
@@ -52,19 +52,19 @@ describe('合并与渲染', () => {
   })
 })
 
-describe('gh 输出解析（边界）', () => {
-  it('解析合法输出，容忍 description 为 null', () => {
-    const out = parseGhOutput(JSON.stringify([
-      { fullName: 'a/x', url: 'https://github.com/a/x', description: null, stargazersCount: 3, updatedAt: '2026-08-01T00:00:00Z' },
-    ]))
+describe('GitHub REST 解析（边界）', () => {
+  it('解析 items，容忍 description 为 null，pushed_at 作 updatedAt', () => {
+    const out = parseRestSearch(JSON.stringify({ items: [
+      { full_name: 'a/x', html_url: 'https://github.com/a/x', description: null, stargazers_count: 3, pushed_at: '2026-08-01T00:00:00Z' },
+    ] }))
     expect(out).toEqual([{ fullName: 'a/x', url: 'https://github.com/a/x', description: '', stars: 3, updatedAt: '2026-08-01T00:00:00Z' }])
   })
 
   it('缺关键字段的条目被丢弃', () => {
-    expect(parseGhOutput('[{"description":"no name"}]')).toEqual([])
+    expect(parseRestSearch('{"items":[{"description":"no name"}]}')).toEqual([])
   })
 
-  it('非数组输出抛错', () => {
-    expect(() => parseGhOutput('{}')).toThrow(/不是数组/)
+  it('缺 items 抛错', () => {
+    expect(() => parseRestSearch('{}')).toThrow(/items/)
   })
 })

@@ -7,4 +7,4 @@ export {
   type FilterOptions,
   type RepoCandidate,
 } from './catalog.js'
-export { DEFAULT_QUERIES, parseGhOutput, searchRepos } from './github.js'
+export { DEFAULT_QUERIES, parseRestSearch, searchRepos } from './github.js'
