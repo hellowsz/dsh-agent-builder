@@ -62,23 +62,25 @@ describe('装配可观测徽章', () => {
 describe('实时计数与状态端点', () => {
   function setupWeb() {
     const h = makeHarness()
-    let handler: ((req: unknown, res: { writeHead(c: number, h: Record<string, string>): void; end(b: string): void }) => void) | undefined
+    type Handler = (req: unknown, res: { writeHead(c: number, h: Record<string, string>): void; end(b: string): void }) => void
+    const handlers = new Map<string, Handler>()
     const routes: string[] = []
     const ctx = {
       ...h.ctx,
       inject: (_d: readonly string[], cb: (s: { webServer: unknown }) => void) =>
         cb({ webServer: {
           tapIndex: () => undefined,
-          register: (r: { path: string; handler: typeof handler }) => { routes.push(r.path); handler = r.handler },
+          register: (r: { path: string; handler: Handler }) => { routes.push(r.path); handlers.set(r.path, r.handler) },
         } }),
     }
     applyCore(ctx as never, { gateFile: writeGateFile(TEST_GATE_YAML), maxRetries: 1 })
-    const status = () => {
+    const call = (path: string) => {
       let body = ''
-      handler!(undefined, { writeHead: () => undefined, end: (b: string) => { body = b } })
-      return JSON.parse(body) as { name: string; counters: { pass: number; block: number; steer: number } }
+      handlers.get(path)!(undefined, { writeHead: () => undefined, end: (b: string) => { body = b } })
+      return JSON.parse(body) as { name: string; fingerprint?: string; ok?: boolean; counters: { pass: number; block: number; steer: number } }
     }
-    return { ...h, routes, status }
+    const status = () => call('/gate/status')
+    return { ...h, routes, status, call }
   }
 
   it('注册 /gate/status;放行/打回/拦截计数实时可查', async () => {

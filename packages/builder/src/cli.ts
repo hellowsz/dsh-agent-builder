@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { createDeepSeekClient, createDshHeadlessClient, type ChatClient } from '@dsh-agent-builder/evaluator'
+import { fingerprintText } from '@dsh-agent-builder/gate-engine'
 import { draftSpec } from './interview.js'
 import { deriveGate } from './derive.js'
 import { generateSamples } from './explore.js'
@@ -219,7 +220,12 @@ async function assetsMenu(): Promise<void> {
   assets.forEach((a, i) => {
     const ev = readRuntimeEvidence(join(ASSETS, a.name, 'runtime-feedback.jsonl'))
     const fb = ev.blockedTotal > 0 ? ` | 线上翻车 ${ev.blockedTotal}(打开任务重新探索即回流再版)` : ''
-    stdout.write(`  [${i + 1}] ${a.title}(${a.name})${fb}\n`)
+    const promptF = join(ASSETS, a.name, `${a.name}.prompt.md`)
+    const fp = fingerprintText(
+      readFileSync(join(ASSETS, a.name, `${a.name}.gate.yaml`), 'utf8'),
+      existsSync(promptF) ? readFileSync(promptF, 'utf8') : '',
+    )
+    stdout.write(`  [${i + 1}] ${a.title}(${a.name}) #${fp}${fb}\n`)
   })
   const a = (await rl.ask('输入序号一键启动使用,回车返回> ')).trim()
   const idx = Number.parseInt(a, 10) - 1

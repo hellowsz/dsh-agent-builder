@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type ChatClient, type ChatMessage } from '@dsh-agent-builder/evaluator'
+import { fingerprintText } from '@dsh-agent-builder/gate-engine'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import {
@@ -255,6 +256,12 @@ export function createWebuiServer(options: WebuiOptions): Server {
               ? (JSON.parse(readFileSync(metaFile, 'utf8')) as { tier?: string })
               : {}
             const evidence = readRuntimeEvidence(join(outDir, name, 'runtime-feedback.jsonl'))
+            const gateFileP = join(outDir, name, `${name}.gate.yaml`)
+            const promptFileP = join(outDir, name, `${name}.prompt.md`)
+            const fingerprint = fingerprintText(
+              readFileSync(gateFileP, 'utf8'),
+              existsSync(promptFileP) ? readFileSync(promptFileP, 'utf8') : '',
+            )
             // 线上零拦截连击达标 → silver 升 gold
             const tier = meta.tier === 'silver' && evidence.cleanStreak >= 10 ? 'gold' : (meta.tier ?? 'bronze')
             return [{
@@ -263,6 +270,7 @@ export function createWebuiServer(options: WebuiOptions): Server {
               frozenAt: statSync(specFile).mtime.toISOString(),
               presetFile,
               tier,
+              fingerprint,
               tierLabel: TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier,
               runtimeBlocked: evidence.blockedTotal,
               runtimeCleanStreak: evidence.cleanStreak,

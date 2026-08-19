@@ -10,10 +10,11 @@
  */
 import { appendFileSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { extractJsonRecord, parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
+import { extractJsonRecord, fingerprintText, parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
 import { buildFeedback, buildReviewFeedback, NO_RECORD_FEEDBACK } from './feedback.js'
 import { createReviewer, type ReviewChannelConfig, type Reviewer } from './review-runner.js'
 import { badgeHtml, badgeInfo } from './badge.js'
+import { runSelfTest } from './selftest.js'
 
 export const name = 'gate-plugin'
 export const inject = ['systemPrompt']
@@ -100,18 +101,21 @@ function steerMessage(text: string): unknown {
 }
 
 /** 校验配置并加载门禁文件。配置是系统边界，快速失败。 */
-export function loadConfig(config: unknown): { gate: GateDefinition; maxRetries: number; gateFile: string; promptText?: string } {
+export function loadConfig(config: unknown): { gate: GateDefinition; maxRetries: number; gateFile: string; promptText?: string; feedbackFile?: string; fingerprint: string } {
   if (typeof config !== 'object' || config === null) throw new Error('gate-plugin 需要配置对象')
   const c = config as Partial<GatePluginConfig>
   if (typeof c.gateFile !== 'string' || c.gateFile.trim() === '') throw new Error('gate-plugin 配置缺少 gateFile')
   const maxRetries = c.maxRetries ?? 2
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error('gate-plugin 的 maxRetries 必须是非负整数')
-  const gate = parseGate(readFileSync(c.gateFile, 'utf8'))
+  const gateText = readFileSync(c.gateFile, 'utf8')
+  const gate = parseGate(gateText)
   const promptText = typeof c.promptFile === 'string' && c.promptFile.trim() !== ''
     ? readFileSync(c.promptFile, 'utf8')
     : undefined
   const feedbackFile = typeof c.feedbackFile === 'string' && c.feedbackFile.trim() !== '' ? c.feedbackFile : undefined
-  return { gate, maxRetries, gateFile: c.gateFile, promptText, feedbackFile }
+  // 配置指纹:与资产库同算法(gate.yaml + prompt.md 内容),两边一致=加载的就是定稿那份
+  const fingerprint = fingerprintText(gateText, promptText ?? '')
+  return { gate, maxRetries, gateFile: c.gateFile, promptText, feedbackFile, fingerprint }
 }
 
 /** cordis 入口：按配置建评审通道（门禁没有 aiReview 条目则不建）。 */
@@ -124,7 +128,7 @@ export function apply(ctx: ContextLike, config: unknown): void {
 
 /** 核心装配（评审执行器可注入，便于单测）。 */
 export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer): void {
-  const { gate, maxRetries, gateFile, promptText, feedbackFile } = loadConfig(config)
+  const { gate, maxRetries, gateFile, promptText, feedbackFile, fingerprint } = loadConfig(config)
 
   /** 运行期回流:一行一条,写失败绝不影响主流程。 */
   const feedback = (entry: Record<string, unknown>): void => {
@@ -148,7 +152,7 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
   const counters = { pass: 0, block: 0, steer: 0, degraded: 0 }
 
   // 装配可观测:Web 页面注入徽章 + /gate/status 状态端点(headless 无 webServer,回调不触发,零影响)
-  const info = badgeInfo(gate, maxRetries, promptText !== undefined, feedbackFile !== undefined)
+  const info = badgeInfo(gate, maxRetries, promptText !== undefined, feedbackFile !== undefined, fingerprint)
   ctx.inject?.(['webServer'], (scoped) => {
     scoped.webServer.tapIndex((html) => html.replace('</body>', `${badgeHtml(info)}</body>`))
     scoped.webServer.register({
@@ -156,10 +160,18 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
       path: '/gate/status',
       handler: (_req, res) => {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ name: gate.name, counters }))
+        res.end(JSON.stringify({ name: gate.name, fingerprint, counters }))
       },
     })
-    ctx.logger?.info(`[gate] ${gate.name}: 装配徽章与 /gate/status 已注入 Web 页面`)
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/gate/selftest',
+      handler: (_req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify(runSelfTest(gate, localToday())))
+      },
+    })
+    ctx.logger?.info(`[gate] ${gate.name}: 装配徽章与 /gate/status /gate/selftest 已注入(指纹 #${fingerprint})`)
   })
 
   const states = new WeakMap<SessionLike, SessionState>()

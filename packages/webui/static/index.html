@@ -419,7 +419,7 @@ async function loadAssets() {
   const d = await res.json();
   const list = $('assetList');
   list.innerHTML = (d.data.assets || []).map((a) =>
-    '<div class="task"><div class="tt">' + esc(a.title) + '</div>' +
+    '<div class="task"><div class="tt">' + esc(a.title) + ' <span style="color:var(--dim)">#' + esc(a.fingerprint || '') + '</span></div>' +
     '<div class="ts2"><span>' + esc(a.tierLabel || '') + '</span>' +
     (a.runtimeBlocked > 0 ? '<span class="st draft">翻车' + a.runtimeBlocked + '·任务页再探索可回流</span>' : '') +
     '<button class="f" data-launch="' + esc(a.name) + '">▶ 一键使用</button></div></div>').join('') ||
