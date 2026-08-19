@@ -15,6 +15,8 @@ export interface DshHeadlessConfig {
   readonly patches?: readonly string[]
   /** 单次超时毫秒，默认 180000（含 dsh 冷启动） */
   readonly timeoutMs?: number
+  /** 传输类失败重试次数,默认 2(DeepSeek API 偶发 TRANSPORT 失败,常见于代理拦截) */
+  readonly retries?: number
 }
 
 function flatten(messages: readonly ChatMessage[]): string {
@@ -28,15 +30,25 @@ export function createDshHeadlessClient(config: DshHeadlessConfig = {}): ChatCli
   const timeoutMs = config.timeoutMs ?? 180_000
   const patchArgs = (config.patches ?? []).flatMap((p) => ['--patch', p])
 
+  const retries = config.retries ?? 2
   return {
     async chat(messages) {
       const [bin, ...baseArgs] = command
       if (bin === undefined) throw new Error('dsh headless command 为空')
       const args = [...baseArgs, ...patchArgs, '--profile', 'headless', flatten(messages)]
-      const { stdout } = await execFileAsync(bin, args, { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 })
-      const text = stdout.trim()
-      if (text === '') throw new Error('dsh headless 没有输出')
-      return text
+      let lastError: unknown
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const { stdout } = await execFileAsync(bin, args, { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 })
+          const text = stdout.trim()
+          if (text === '') throw new Error('dsh headless 没有输出')
+          return text
+        } catch (e) {
+          lastError = e
+        }
+      }
+      const msg = lastError instanceof Error ? lastError.message : String(lastError)
+      throw new Error(`dsh headless 失败(已重试 ${retries} 次):${msg.slice(0, 300)}`)
     },
   }
 }

@@ -396,6 +396,12 @@ function renderProducts(samples, r) {
     } else {
       inner += '<p class="hint" style="margin:8px 0 0">最终产物:(被拦下,无产物' + (x.expect === 'block' ? ' — 符合预期,系统拒绝了无关输入' : '') + ')</p>';
     }
+    if (x.files && x.files.length) {
+      inner += '<p class="hint" style="margin:8px 0 0">产出文件(点击下载查看):</p><ul class="plan">' +
+        x.files.map((f) => '<li><a style="color:var(--cyan)" href="/api/run-file?taskId=' + encodeURIComponent(task.id) +
+          '&file=' + encodeURIComponent(x.name.replace(/[^\p{L}\p{N}_-]+/gu, "_") + '/' + f.name) + '">' + esc(f.name) +
+          '</a> <span style="color:var(--dim)">(' + Math.round(f.bytes / 1024) + ' KB)</span></li>').join('') + '</ul>';
+    }
     const badge = x.ok ? '<span class="tag" style="color:var(--green);border-color:#1d3a2a">符合预期</span>'
                        : '<span class="tag" style="color:var(--red);border-color:#4a1d1d">不符合预期</span>';
     const originTag = '<span class="tag">' + (ORIGIN_LABEL[byOrigin[x.name]] || byOrigin[x.name]) + '</span>';

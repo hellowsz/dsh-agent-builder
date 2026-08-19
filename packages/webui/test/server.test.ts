@@ -38,12 +38,22 @@ const reviewClient: ChatClient = {
 
 const outDir = mkdtempSync(join(tmpdir(), 'webui-out-'))
 const sessionsDir = mkdtempSync(join(tmpdir(), 'webui-sessions-'))
-// 假执行器:模拟"候选配置交 DSH 执行"——按样例原文回产物(不真起 DSH)
-const produceFactory = (presetFile: string) => async (sample: { source: string }) => {
+// 假执行器:模拟"候选配置交 DSH 执行"——按样例原文回产物(不真起 DSH);
+// 每个样例写一个交付文件进 runsDir,模拟 PPT 类文件产物
+const produceFactory = (presetFile: string, runsDir?: string) => async (sample: { source: string; name: string }) => {
   if (!presetFile.endsWith('.preset.yaml')) throw new Error('candidate preset 未写盘')
   if (sample.source.includes('天气')) return '这段文字里没有可整理的信息。'
-  if (sample.source.includes('56')) return '```json\n{"amount": 56, "note": "打车"}\n```'
-  return '```json\n{"amount": 428, "note": "午餐"}\n```'
+  const answer = sample.source.includes('56')
+    ? '```json\n{"amount": 56, "note": "打车"}\n```'
+    : '```json\n{"amount": 428, "note": "午餐"}\n```'
+  if (runsDir !== undefined) {
+    const { mkdirSync, writeFileSync } = await import('node:fs')
+    const dir = join(runsDir, sample.name.replace(/[^\p{L}\p{N}_-]+/gu, '_'))
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'deliverable.txt'), '演示交付物')
+    return { answer, files: [{ name: 'deliverable.txt', path: join(dir, 'deliverable.txt'), bytes: 15 }] }
+  }
+  return answer
 }
 const launched: string[] = []
 const launcher = async (presetFile: string) => { launched.push(presetFile); return 'http://127.0.0.1:3080' }
@@ -150,6 +160,18 @@ describe('webui 服务(任务制)', () => {
     const r = await post('/api/explore', { taskId: id })
     expect(r.status).toBe(400)
     expect(r.body.error).toContain('先起草')
+  })
+
+  it('文件产物:报告携带 files,/api/run-file 可下载,路径穿越被拒', async () => {
+    const res = await fetch(base + '/api/task?id=' + taskId)
+    const { data } = (await res.json()) as { data: { task: { report: { results: Array<{ name: string; files?: Array<{ name: string }> }> } } } }
+    const withFile = data.task.report.results.find((r) => r.files !== undefined)
+    expect(withFile).toBeDefined()
+    const dl = await fetch(base + '/api/run-file?taskId=' + taskId + '&file=' + encodeURIComponent(withFile!.name.replace(/[^\p{L}\p{N}_-]+/gu, '_') + '/deliverable.txt'))
+    expect(dl.status).toBe(200)
+    expect(await dl.text()).toBe('演示交付物')
+    const evil = await fetch(base + '/api/run-file?taskId=' + taskId + '&file=' + encodeURIComponent('../../' + taskId + '.json'))
+    expect(evil.status).toBe(404)
   })
 
   it('设计与执行分离:探索时候选配置写进任务目录', async () => {

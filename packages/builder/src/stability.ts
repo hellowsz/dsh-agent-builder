@@ -35,6 +35,21 @@ export interface SampleResult {
   readonly reviewError?: string
   /** 工作 agent 的最终产物(抽到 JSON 才有),供用户确认 */
   readonly record?: Readonly<Record<string, unknown>>
+  /** 本次执行产出的文件(PPT/文档等交付物),供用户查看下载 */
+  readonly files?: readonly ProducedFile[]
+}
+
+/** 执行产出的一个文件。 */
+export interface ProducedFile {
+  readonly name: string
+  readonly path: string
+  readonly bytes: number
+}
+
+/** produce 的富返回:最终答复 + 产出文件。 */
+export interface ProducedOutput {
+  readonly answer: string
+  readonly files?: readonly ProducedFile[]
 }
 
 /** 稳定性报告。 */
@@ -67,7 +82,7 @@ export interface RunOptions {
    * 产物生产方式(可选):缺省用 workClient 直连;传入后改走它——
    * 典型用法是 createDshProducer,让拼装发生在真 DeepSeek Harness 里(设计与执行分离)。
    */
-  readonly produce?: (sample: Sample) => Promise<string>
+  readonly produce?: (sample: Sample) => Promise<string | ProducedOutput>
 }
 
 /** 跑一个样例：工作 agent 产出 → 确定性门禁 → ④ 独立评审。 */
@@ -86,23 +101,25 @@ export async function runSample(
   emit({ type: 'sample:start', sample: sample.name })
   try {
     const t0 = Date.now()
-    const answer = options.produce !== undefined
+    const produced = options.produce !== undefined
       ? await options.produce(sample)
       : await options.workClient.chat([
           { role: 'system', content: deriveWorkPrompt(spec) },
           { role: 'user', content: sample.source },
         ])
+    const answer = typeof produced === 'string' ? produced : produced.answer
+    const files = typeof produced === 'string' ? undefined : produced.files
     emit({ type: 'work:done', sample: sample.name, chars: answer.length, ms: Date.now() - t0 })
     const record = extractJsonRecord(answer)
     if (record === undefined) {
       emit({ type: 'gate:verdict', sample: sample.name, passed: false, issues: ['no_structured_output'] })
-      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues: ['no_structured_output'] })
+      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues: ['no_structured_output'], ...(files !== undefined && files.length > 0 ? { files } : {}) })
     }
     const verdict = runGate(gate, { record, source: sample.source, today: options.today })
     emit({ type: 'gate:verdict', sample: sample.name, passed: verdict.passed, issues: verdict.issues.map((i) => i.code) })
     if (!verdict.passed) {
       const issues = verdict.issues.map((i) => i.code)
-      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues, record })
+      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues, record, ...(files !== undefined && files.length > 0 ? { files } : {}) })
     }
     const t1 = Date.now()
     const reviewed: ReviewResult = await review(options.reviewClient, {
@@ -123,10 +140,11 @@ export async function runSample(
         ok: sample.expect === 'block',
         issues: reviewIssues.length > 0 ? reviewIssues : ['review_failed'],
         record,
+        ...(files !== undefined && files.length > 0 ? { files } : {}),
         ...(reviewed.error !== undefined ? { reviewError: reviewed.error } : {}),
       })
     }
-    return finish({ ...base, actual: 'pass', ok: sample.expect === 'pass', issues: [], record })
+    return finish({ ...base, actual: 'pass', ok: sample.expect === 'pass', issues: [], record, ...(files !== undefined && files.length > 0 ? { files } : {}) })
   } catch (e) {
     return finish({ ...base, actual: 'error', ok: false, issues: [e instanceof Error ? e.message : String(e)] })
   }

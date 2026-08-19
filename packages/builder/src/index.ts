@@ -9,6 +9,8 @@ export {
   renderReport,
   type Sample,
   type SampleResult,
+  type ProducedFile,
+  type ProducedOutput,
   type StabilityReport,
   type PipelineEvent,
   type RunOptions,

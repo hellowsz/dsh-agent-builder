@@ -26,5 +26,6 @@ export function deriveWorkPrompt(spec: TaskSpec): string {
     '3. 最终结果必须放在一个 ```json 围栏里输出，字段如下：',
     ...spec.fields.map(fieldLine),
     '4. json 围栏外可以简短说明，但结论以围栏内 JSON 为准。',
+    '5. 若任务要求产出文件(如 PPT/文档/表格)，把文件写到当前工作目录，并在 JSON 里如实填写文件名、页数等信息——不许谎报。',
   ].join('\n')
 }

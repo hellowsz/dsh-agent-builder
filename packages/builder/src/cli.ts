@@ -105,6 +105,10 @@ function showProducts(samples: readonly Sample[] | undefined, report: StabilityR
     } else {
       stdout.write(`产物: (被拦下${r.expect === 'block' ? ' — 符合预期,拒绝了无关输入' : ''})\n`)
     }
+    if (r.files !== undefined && r.files.length > 0) {
+      stdout.write('产出文件:\n')
+      for (const f of r.files) stdout.write(`  ${f.path}(${Math.round(f.bytes / 1024)} KB)\n`)
+    }
   }
 }
 

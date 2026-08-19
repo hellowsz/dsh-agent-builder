@@ -25,6 +25,7 @@ import {
   validateSpec,
   writeCandidate,
   type PipelineEvent,
+  type ProducedOutput,
   type Sample,
   type StabilityReport,
   type TaskSpec,
@@ -51,7 +52,7 @@ export interface WebuiOptions {
    * 产物生产工厂(可注入,测试用):给定候选 preset 文件,返回"样例→产物"函数。
    * 缺省 createDshProducer——拼装发生在真 DeepSeek Harness 里。
    */
-  readonly produceFactory?: (presetFile: string) => (sample: Sample) => Promise<string>
+  readonly produceFactory?: (presetFile: string, runsDir?: string) => (sample: Sample) => Promise<string | ProducedOutput>
   /** 一键启动器(可注入,测试用):给定 preset 返回可访问的 URL。缺省真启 dsh web。 */
   readonly launcher?: (presetFile: string) => Promise<string>
   /** 网络素材采集器(可注入,测试用):缺省 collectWebMaterials(真上网,默认开)。 */
@@ -157,7 +158,8 @@ export function createWebuiServer(options: WebuiOptions): Server {
   const reviewClient = loggingClient(options.reviewClient, '评审agent', bus)
   const sessionsDir = options.sessionsDir ?? resolve(here, '../../../sessions')
   const store = new TaskStore(sessionsDir)
-  const produceFactory = options.produceFactory ?? ((presetFile: string) => createDshProducer({ presetFile }))
+  const produceFactory = options.produceFactory ?? ((presetFile: string, runsDir?: string) =>
+    createDshProducer({ presetFile, ...(runsDir !== undefined ? { runsDir } : {}) }))
   const materialsCollector = options.materialsCollector ?? ((spec: TaskSpec) => collectWebMaterials(workClient, spec, 1))
   let dshChild: ReturnType<typeof spawn> | undefined
   const launcher = options.launcher ?? (async (presetFile: string) => {
@@ -193,6 +195,29 @@ export function createWebuiServer(options: WebuiOptions): Server {
     }
     if (req.method === 'GET' && url === '/api/tasks') {
       send(res, 200, { ok: true, data: { tasks: store.list() } })
+      return
+    }
+    if (req.method === 'GET' && url.startsWith('/api/run-file?')) {
+      const params = new URL(url, 'http://x').searchParams
+      const taskId = params.get('taskId') ?? ''
+      const file = params.get('file') ?? ''
+      const base = resolve(sessionsDir, taskId, 'runs')
+      const full = resolve(base, file)
+      if (taskId === '' || file === '' || !full.startsWith(base + '/') || !existsSync(full)) {
+        send(res, 404, { ok: false, error: '文件不存在' })
+        return
+      }
+      const ext = full.slice(full.lastIndexOf('.') + 1).toLowerCase()
+      const types: Record<string, string> = {
+        pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        html: 'text/html; charset=utf-8', txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8',
+        json: 'application/json; charset=utf-8', csv: 'text/csv; charset=utf-8',
+      }
+      res.writeHead(200, {
+        'content-type': types[ext] ?? 'application/octet-stream',
+        'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(full.slice(full.lastIndexOf('/') + 1))}`,
+      })
+      res.end(readFileSync(full))
       return
     }
     if (req.method === 'GET' && url === '/api/assets') {
@@ -304,7 +329,7 @@ export function createWebuiServer(options: WebuiOptions): Server {
             reviewClient,
             today: localToday(),
             onEvent: pipelineLog(bus),
-            produce: produceFactory(candidate.presetFile),
+            produce: produceFactory(candidate.presetFile, join(sessionsDir, task.id, 'runs')),
           })
           const tier = tierOf(samples, report)
           bus.log(report.matchRate === 1 ? 'ok' : 'warn', 'verify',
