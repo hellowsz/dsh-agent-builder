@@ -46,6 +46,16 @@ describe('draftSpec（假 LLM）', () => {
     await expect(draftSpec(client, 'x', 2)).rejects.toThrow(/仍不合法/)
   })
 
+  it('factor≤0 被机械丢弃(真模型回归:模型曾输出 factor:0 使规则恒不成立)', async () => {
+    const withZero = {
+      ...REIMBURSEMENT_SPEC,
+      rules: [{ id: 'r1', type: 'compare', left: 'tax', op: '<=', right: 'amount', factor: 0 }],
+    }
+    const client: ChatClient = { chat: async () => JSON.stringify(withZero) }
+    const spec = await draftSpec(client, 'x')
+    expect(spec.rules[0]).not.toHaveProperty('factor')
+  })
+
   it('驼峰字段名被确定性归一为 kebab-case（真模型回归:模型爱输出 camelCase）', async () => {
     const camel = {
       ...REIMBURSEMENT_SPEC,

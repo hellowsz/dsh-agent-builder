@@ -19,27 +19,44 @@ AI agent 的老毛病:同样的输入,今天对、明天错。会编数字、编
 
 能用确定性规则判的绝不靠 AI;④ 只兜前三层管不到的底。
 
-## 怎么用
+## 架构:设计与执行严格分离
+
+```
+┌─ agent builder(设计侧,两个能力)──────────────┐
+│ ①设计:大白话需求 → 拼接说明书(spec/门禁/提示词/preset) │
+│ ②评审:DSH 拼出来的产物 → 门禁复核 + ④独立评审          │
+└──────────┬────────────────▲─────────────┘
+     候选配置 │                  │ 产物
+            ▼                  │
+┌─ DeepSeek Harness(执行侧)─────┴─────────────┐
+│ 挂载候选配置拼装:模型干活,门禁插件在 DSH 内实时把关     │
+└───────────────────────────────────────────┘
+
+用户只做三次判断:确认说明书 → 评估产物 → 定稿。
+定稿进「用户资产库」:一份能持续交付的 harness 配置,一键挂进 DSH 使用。
+```
+
+## 怎么用(双模式,共享同一任务库与资产库)
 
 ```sh
 pnpm install
+pnpm --filter @dsh-agent-builder/gate-plugin build   # 首次:构建门禁插件
 
-# 方式一:网页向导(推荐给不熟终端的用户)——打开 http://127.0.0.1:4173
+# 模式一:网页向导(面向小白)——打开 http://127.0.0.1:4173
 pnpm --filter @dsh-agent-builder/webui serve
 
-# 方式二:命令行对话
+# 模式二:专业 CLI(同一批任务/资产,终端里走完全程)
 pnpm --filter @dsh-agent-builder/builder cli
 ```
 
 模型通道二选一:设 `DEEPSEEK_API_KEY` 走 DeepSeek 直连;不设则自动回落本机 `dsh --profile headless`(凭证留在 dsh 里,每步约 1 分钟)。
 
-网页向导五步:说需求 → 确认方案(可提修改意见) → 贴 1-3 个真实样例 → 看诚实的稳定性报告 → 一键固化并拿到 DSH 启动命令。
+流程:说需求 → 确认拼接说明书 → **AI 自造样例,候选配置交真 DSH 拼装,产物回 builder 评审** → 你评估产物(可提意见触发说明书修订+重探索,可补充真实样例)→ 定稿进资产库 → 一键启动使用。任务持久化在 `sessions/`,随时新建/恢复,网页与 CLI 可互相接续。
 
-固化产物在 `agents/<name>/`:门禁(`*.gate.yaml`)、提示词(`*.prompt.md`)、DSH preset(`*.preset.yaml`)、规格与稳定性报告。在 DSH 里使用:
+定稿资产在 `agents/<name>/`(五件套:门禁/提示词/preset/规格/报告),一键使用:
 
 ```sh
-pnpm --filter @dsh-agent-builder/gate-plugin build   # 产出自包含 dist/gate-plugin.mjs
-dsh --patch agents/<name>/<name>.preset.yaml web
+npx -y @deepseek-ai/dsh --patch agents/<name>/<name>.preset.yaml --profile web --port 3080
 ```
 
 运行时,门禁插件挂在 DSH 的 `agent/turn-stopping` 扩展点,**四层全部生效**:确定性三层不过 → `agent.steer()` 喂回具体问题重开回合;三层过了再交**独立评审 agent**(dsh headless 子进程,独立会话)做 ④ 软判断,不过同样打回;重试限次防死锁,评审预算耗尽诚实告警放行。

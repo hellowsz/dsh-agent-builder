@@ -38,7 +38,16 @@ const reviewClient: ChatClient = {
 
 const outDir = mkdtempSync(join(tmpdir(), 'webui-out-'))
 const sessionsDir = mkdtempSync(join(tmpdir(), 'webui-sessions-'))
-const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs', sessionsDir })
+// 假执行器:模拟"候选配置交 DSH 执行"——按样例原文回产物(不真起 DSH)
+const produceFactory = (presetFile: string) => async (sample: { source: string }) => {
+  if (!presetFile.endsWith('.preset.yaml')) throw new Error('candidate preset 未写盘')
+  if (sample.source.includes('天气')) return '这段文字里没有可整理的信息。'
+  if (sample.source.includes('56')) return '```json\n{"amount": 56, "note": "打车"}\n```'
+  return '```json\n{"amount": 428, "note": "午餐"}\n```'
+}
+const launched: string[] = []
+const launcher = async (presetFile: string) => { launched.push(presetFile); return 'http://127.0.0.1:3080' }
+const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs', sessionsDir, produceFactory, launcher })
 let base = ''
 
 beforeAll(async () => {
@@ -49,7 +58,7 @@ afterAll(() => server.close())
 
 async function post(path: string, body: unknown) {
   const res = await fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-  return { status: res.status, body: (await res.json()) as { ok: boolean; data?: never; error?: string } }
+  return { status: res.status, body: (await res.json()) as { ok: boolean; data?: unknown; error?: string } }
 }
 
 describe('webui 服务(任务制)', () => {
@@ -114,7 +123,7 @@ describe('webui 服务(任务制)', () => {
   })
 
   it('持久化:新 TaskStore 从同一目录能恢复任务', async () => {
-    const { TaskStore } = await import('../src/tasks.js')
+    const { TaskStore } = await import('@dsh-agent-builder/builder')
     const store2 = new TaskStore(sessionsDir)
     const revived = store2.get(taskId)
     expect(revived.status).toBe('frozen')
@@ -134,6 +143,33 @@ describe('webui 服务(任务制)', () => {
     const r = await post('/api/explore', { taskId: id })
     expect(r.status).toBe(400)
     expect(r.body.error).toContain('先起草')
+  })
+
+  it('设计与执行分离:探索时候选配置写进任务目录', async () => {
+    const { existsSync: ex } = await import('node:fs')
+    expect(ex(join(sessionsDir, taskId, 'candidate', 'demo-sorter.preset.yaml'))).toBe(true)
+    expect(ex(join(sessionsDir, taskId, 'candidate', 'demo-sorter.gate.yaml'))).toBe(true)
+  })
+
+  it('资产库:定稿后 /api/assets 可见,带一键命令', async () => {
+    const res = await fetch(base + '/api/assets')
+    const { data } = (await res.json()) as { data: { assets: Array<{ name: string; title: string; dshCommand: string }> } }
+    const asset = data.assets.find((a) => a.name === 'demo-sorter')
+    expect(asset).toBeDefined()
+    expect(asset!.title).toBe('演示整理助手')
+    expect(asset!.dshCommand).toContain('--profile web')
+  })
+
+  it('一键启动:/api/assets/launch 调起 DSH 并返回 URL', async () => {
+    const r = await post('/api/assets/launch', { name: 'demo-sorter' })
+    expect(r.status).toBe(200)
+    expect((r.body.data as { url: string }).url).toContain('127.0.0.1:3080')
+    expect(launched[0]).toContain('demo-sorter.preset.yaml')
+  })
+
+  it('一键启动:不存在的资产报错', async () => {
+    const r = await post('/api/assets/launch', { name: 'nope' })
+    expect(r.status).toBe(400)
   })
 
   it('未知路径 404', async () => {

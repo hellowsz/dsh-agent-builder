@@ -79,7 +79,8 @@ function normalize(raw: unknown): TaskSpec {
       ...(typeof x.left === 'string' ? { left: toKebab(x.left) } : {}),
       ...(x.op === '<=' || x.op === '<' || x.op === '>=' || x.op === '>' || x.op === '==' ? { op: x.op } : {}),
       ...(typeof x.right === 'string' ? { right: toKebab(x.right) } : {}),
-      ...(typeof x.factor === 'number' ? { factor: x.factor } : {}),
+      // factor≤0 使比较恒不成立,是模型笔误(真模型回归:曾输出 factor:0),机械丢弃
+      ...(typeof x.factor === 'number' && x.factor > 0 ? { factor: x.factor } : {}),
       ...(typeof x.field === 'string' ? { field: toKebab(x.field) } : {}),
     })),
     aiReview: arr(r.aiReview).map((a) => ({

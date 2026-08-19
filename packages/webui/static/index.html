@@ -137,13 +137,17 @@
     <div class="link"></div>
     <div class="node" id="n3"><div class="t">03 自动探索验证</div><div class="s" id="n3s">—</div></div>
     <div class="sub" id="subflow" style="display:none">
-      <div class="node" id="sw"><div class="t">├ 工作 agent</div><div class="s" id="sws">—</div></div>
-      <div class="node" id="sg"><div class="t">├ 门禁 ①结构 ②规则 ③对照</div><div class="s" id="sgs">—</div></div>
-      <div class="node" id="sr"><div class="t">└ ④ 独立评审</div><div class="s" id="srs">—</div></div>
+      <div class="node" id="sw"><div class="t">├ DSH 拼装(执行)</div><div class="s" id="sws">—</div></div>
+      <div class="node" id="sg"><div class="t">├ builder 评审:门禁①②③</div><div class="s" id="sgs">—</div></div>
+      <div class="node" id="sr"><div class="t">└ builder 评审:④软判断</div><div class="s" id="srs">—</div></div>
     </div>
     <div class="chips" id="sampleChips"></div>
     <div class="link"></div>
     <div class="node" id="n4"><div class="t">04 说明书定稿</div><div class="s" id="n4s">—</div></div>
+    <div style="height:14px"></div>
+    <h3>ASSETS · 用户资产</h3>
+    <div id="assetList"></div>
+    <div id="assetUrl" class="hint" style="display:none"></div>
   </aside>
 
   <!-- 工作区 -->
@@ -218,12 +222,16 @@
       <span class="title">CONSOLE</span>
       <button class="f on" data-f="all">ALL</button>
       <button class="f" data-f="sys">sys</button>
+      <button class="f" data-f="task">task</button>
       <button class="f" data-f="draft">draft</button>
+      <button class="f" data-f="explore">explore</button>
+      <button class="f" data-f="exec">exec</button>
       <button class="f" data-f="llm">llm</button>
       <button class="f" data-f="gate">gate</button>
       <button class="f" data-f="review">review</button>
       <button class="f" data-f="verify">verify</button>
       <button class="f" data-f="freeze">freeze</button>
+      <button class="f" data-f="assets">assets</button>
       <span class="sp"></span>
       <button class="f" id="autoscroll">autoscroll:on</button>
       <button class="f" id="clearLog">clear</button>
@@ -396,6 +404,29 @@ function renderProducts(samples, r) {
 // ── 任务管理 ──
 let task = null; // 当前任务(服务端为准)
 
+async function loadAssets() {
+  const res = await fetch('/api/assets');
+  const d = await res.json();
+  const list = $('assetList');
+  list.innerHTML = (d.data.assets || []).map((a) =>
+    '<div class="task"><div class="tt">' + esc(a.title) + '</div>' +
+    '<div class="ts2"><span>' + esc(a.name) + '</span>' +
+    '<button class="f" data-launch="' + esc(a.name) + '">▶ 一键使用</button></div></div>').join('') ||
+    '<p class="hint">定稿后出现在这里</p>';
+  list.querySelectorAll('[data-launch]').forEach((b) => {
+    b.onclick = async () => {
+      b.textContent = '启动中…'; b.disabled = true;
+      try {
+        const r = await api('/api/assets/launch', { name: b.dataset.launch });
+        const box = $('assetUrl');
+        box.style.display = '';
+        box.innerHTML = '已就绪 → <a href="' + esc(r.url) + '" target="_blank" style="color:var(--green)">' + esc(r.url) + '</a>(贴原文即用,四层门禁在岗)';
+      } catch (e) { alert('启动失败:' + e.message); }
+      finally { b.textContent = '▶ 一键使用'; b.disabled = false; }
+    };
+  });
+}
+
 async function loadTasks() {
   const res = await fetch('/api/tasks');
   const d = await res.json();
@@ -440,7 +471,7 @@ function resume() {
   } else if (task.status === 'frozen') {
     setNode('n2', 'ok', '已确认');
     if (task.report) { renderReport(task.report); renderProducts(task.samples, task.report); setNode('n3', 'ok', '已验证'); }
-    renderFrozen(task.frozen); setNode('n4', 'ok', '已定稿'); show(5);
+    renderFrozen(task.frozen); setNode('n4', 'ok', '已定稿'); show(5); loadAssets();
   }
   loadTasks();
 }
@@ -521,6 +552,7 @@ $('btnFreeze').onclick = async () => {
 $('btnAgain').onclick = () => { task = null; resume(); };
 
 loadTasks();
+loadAssets();
 resume();
 </script>
 </body>

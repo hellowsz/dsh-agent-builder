@@ -7,20 +7,25 @@ import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type ChatClient, type ChatMessage } from '@dsh-agent-builder/evaluator'
+import { existsSync, readdirSync, statSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import {
+  createDshProducer,
   deriveGate,
   draftSpec,
   freeze,
   generateSamples,
   runStability,
   validateSpec,
+  writeCandidate,
   type PipelineEvent,
   type Sample,
   type StabilityReport,
   type TaskSpec,
+  TaskStore,
 } from '@dsh-agent-builder/builder'
 import { LogBus } from './logbus.js'
-import { TaskStore } from './tasks.js'
+
 
 const here = dirname(fileURLToPath(import.meta.url))
 const MAX_BODY = 256 * 1024
@@ -36,6 +41,13 @@ export interface WebuiOptions {
   readonly pluginPath?: string
   /** 任务持久化目录(默认仓库根 sessions/) */
   readonly sessionsDir?: string
+  /**
+   * 产物生产工厂(可注入,测试用):给定候选 preset 文件,返回"样例→产物"函数。
+   * 缺省 createDshProducer——拼装发生在真 DeepSeek Harness 里。
+   */
+  readonly produceFactory?: (presetFile: string) => (sample: Sample) => Promise<string>
+  /** 一键启动器(可注入,测试用):给定 preset 返回可访问的 URL。缺省真启 dsh web。 */
+  readonly launcher?: (presetFile: string) => Promise<string>
 }
 
 interface Envelope {
@@ -135,7 +147,18 @@ export function createWebuiServer(options: WebuiOptions): Server {
   const bus = new LogBus()
   const workClient = loggingClient(options.workClient, '工作agent', bus)
   const reviewClient = loggingClient(options.reviewClient, '评审agent', bus)
-  const store = new TaskStore(options.sessionsDir ?? resolve(here, '../../../sessions'))
+  const sessionsDir = options.sessionsDir ?? resolve(here, '../../../sessions')
+  const store = new TaskStore(sessionsDir)
+  const produceFactory = options.produceFactory ?? ((presetFile: string) => createDshProducer({ presetFile }))
+  let dshChild: ReturnType<typeof spawn> | undefined
+  const launcher = options.launcher ?? (async (presetFile: string) => {
+    dshChild?.kill()
+    dshChild = spawn('npx', ['-y', '@deepseek-ai/dsh', '--patch', presetFile, '--profile', 'web', '--port', '3080'], {
+      detached: false, stdio: 'ignore',
+    })
+    await new Promise((r) => setTimeout(r, 15_000)) // 等 dsh 起服务
+    return 'http://127.0.0.1:3080'
+  })
   bus.log('info', 'sys', `服务就绪(已加载 ${store.list().length} 个历史任务)`)
 
   return createServer((req, res) => {
@@ -161,6 +184,25 @@ export function createWebuiServer(options: WebuiOptions): Server {
     }
     if (req.method === 'GET' && url === '/api/tasks') {
       send(res, 200, { ok: true, data: { tasks: store.list() } })
+      return
+    }
+    if (req.method === 'GET' && url === '/api/assets') {
+      const assets = existsSync(outDir)
+        ? readdirSync(outDir).flatMap((name) => {
+            const specFile = join(outDir, name, 'spec.json')
+            const presetFile = join(outDir, name, `${name}.preset.yaml`)
+            if (!existsSync(specFile) || !existsSync(presetFile)) return []
+            const spec = JSON.parse(readFileSync(specFile, 'utf8')) as TaskSpec
+            return [{
+              name,
+              title: spec.title,
+              frozenAt: statSync(specFile).mtime.toISOString(),
+              presetFile,
+              dshCommand: `npx -y @deepseek-ai/dsh --patch ${presetFile} --profile web --port 3080`,
+            }]
+          })
+        : []
+      send(res, 200, { ok: true, data: { assets } })
       return
     }
     if (req.method === 'GET' && url.startsWith('/api/task?id=')) {
@@ -217,17 +259,29 @@ export function createWebuiServer(options: WebuiOptions): Server {
             `[${task.title}] 样例就绪:${generated.length} 条自造${extra.length > 0 ? ` + ${extra.length} 条用户真实样例` : ''}`,
             { samples: samples.map((x) => ({ name: x.name, expect: x.expect, source: x.source })) })
           const gate = deriveGate(spec)
-          bus.log('info', 'verify', `[${task.title}] 用 DeepSeek Harness 流水线拼装:${samples.length} 个样例,门禁 ${gate.checks.length} 项检查`)
+          const candidate = writeCandidate(spec, join(sessionsDir, task.id, 'candidate'), { pluginPath })
+          bus.log('info', 'exec', `[${task.title}] 设计完成→候选配置已写盘,交给 DeepSeek Harness 执行(${samples.length} 个样例,门禁 ${gate.checks.length} 项)`, { candidate })
           const report = await runStability(spec, gate, samples, {
             workClient,
             reviewClient,
             today: localToday(),
             onEvent: pipelineLog(bus),
+            produce: produceFactory(candidate.presetFile),
           })
           bus.log(report.matchRate === 1 ? 'ok' : 'warn', 'verify',
-            `[${task.title}] 拼装完成:${report.matched}/${report.total} 符合预期,等你评估产物`)
+            `[${task.title}] DSH 拼装完成,agent builder 评审毕:${report.matched}/${report.total} 符合预期,等你评估定稿`)
           const updated = store.update(task.id, { samples, report, status: 'review' })
           send(res, 200, { ok: true, data: { task: updated } })
+          return
+        }
+        case '/api/assets/launch': {
+          const name = typeof body.name === 'string' ? body.name : ''
+          const presetFile = join(outDir, name, `${name}.preset.yaml`)
+          if (name === '' || !existsSync(presetFile)) throw new Error(`资产不存在:${name}`)
+          bus.log('info', 'assets', `一键启动:${name} 挂载进 DeepSeek Harness…`)
+          const launchedUrl = await launcher(presetFile)
+          bus.log('ok', 'assets', `${name} 已就绪:${launchedUrl}(直接贴原文使用,四层门禁在岗)`)
+          send(res, 200, { ok: true, data: { url: launchedUrl } })
           return
         }
         case '/api/freeze': {

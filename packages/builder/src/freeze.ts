@@ -4,9 +4,8 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { deriveGateYaml } from './derive.js'
-import { deriveWorkPrompt } from './prompt.js'
-import { derivePresetYaml, type PresetOptions } from './preset.js'
+import { writeCandidate } from './candidate.js'
+import { type PresetOptions } from './preset.js'
 import { renderReport, type StabilityReport } from './stability.js'
 import { type TaskSpec } from './spec.js'
 
@@ -24,18 +23,11 @@ export function freeze(
 ): FreezeResult {
   const dir = join(outDir, spec.name)
   mkdirSync(dir, { recursive: true })
-
-  const presetWithPrompt = {
-    ...presetOptions,
-    promptFilePath: presetOptions.promptFilePath ?? join(dir, `${spec.name}.prompt.md`),
+  writeCandidate(spec, dir, { pluginPath: presetOptions.pluginPath, maxRetries: presetOptions.maxRetries })
+  writeFileSync(join(dir, 'spec.json'), JSON.stringify(spec, null, 2))
+  writeFileSync(join(dir, 'report.md'), renderReport(spec, report))
+  return {
+    dir,
+    files: [`${spec.name}.gate.yaml`, `${spec.name}.prompt.md`, `${spec.name}.preset.yaml`, 'spec.json', 'report.md'],
   }
-  const files: Array<[string, string]> = [
-    [`${spec.name}.gate.yaml`, deriveGateYaml(spec)],
-    [`${spec.name}.prompt.md`, deriveWorkPrompt(spec)],
-    [`${spec.name}.preset.yaml`, derivePresetYaml(spec, presetWithPrompt)],
-    ['spec.json', JSON.stringify(spec, null, 2)],
-    ['report.md', renderReport(spec, report)],
-  ]
-  for (const [name, content] of files) writeFileSync(join(dir, name), content)
-  return { dir, files: files.map(([name]) => name) }
 }

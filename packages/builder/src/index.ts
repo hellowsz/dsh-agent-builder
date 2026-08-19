@@ -15,3 +15,6 @@ export {
 } from './stability.js'
 export { freeze, type FreezeResult } from './freeze.js'
 export { generateSamples } from './explore.js'
+export { writeCandidate, type CandidatePaths } from './candidate.js'
+export { createDshProducer, type DshProducerConfig } from './dsh-runner.js'
+export { TaskStore, type BuilderTask, type TaskStatus, type TaskSummary } from './tasks.js'

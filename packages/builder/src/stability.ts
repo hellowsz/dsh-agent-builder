@@ -58,6 +58,11 @@ export interface RunOptions {
   readonly today: string
   /** 过程事件回调(可选):每步实时上报,供可视化与日志 */
   readonly onEvent?: (event: PipelineEvent) => void
+  /**
+   * 产物生产方式(可选):缺省用 workClient 直连;传入后改走它——
+   * 典型用法是 createDshProducer,让拼装发生在真 DeepSeek Harness 里(设计与执行分离)。
+   */
+  readonly produce?: (sample: Sample) => Promise<string>
 }
 
 /** 跑一个样例：工作 agent 产出 → 确定性门禁 → ④ 独立评审。 */
@@ -76,10 +81,12 @@ export async function runSample(
   emit({ type: 'sample:start', sample: sample.name })
   try {
     const t0 = Date.now()
-    const answer = await options.workClient.chat([
-      { role: 'system', content: deriveWorkPrompt(spec) },
-      { role: 'user', content: sample.source },
-    ])
+    const answer = options.produce !== undefined
+      ? await options.produce(sample)
+      : await options.workClient.chat([
+          { role: 'system', content: deriveWorkPrompt(spec) },
+          { role: 'user', content: sample.source },
+        ])
     emit({ type: 'work:done', sample: sample.name, chars: answer.length, ms: Date.now() - t0 })
     const record = extractJsonRecord(answer)
     if (record === undefined) {

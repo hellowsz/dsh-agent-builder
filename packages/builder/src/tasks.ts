@@ -5,7 +5,8 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { type Sample, type StabilityReport, type TaskSpec } from '@dsh-agent-builder/builder'
+import { type Sample, type StabilityReport } from './stability.js'
+import { type TaskSpec } from './spec.js'
 
 export type TaskStatus = 'draft' | 'review' | 'frozen'
 
