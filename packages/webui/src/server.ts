@@ -6,17 +6,19 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { type ChatClient } from '@dsh-agent-builder/evaluator'
+import { type ChatClient, type ChatMessage } from '@dsh-agent-builder/evaluator'
 import {
   deriveGate,
   draftSpec,
   freeze,
   runStability,
   validateSpec,
+  type PipelineEvent,
   type Sample,
   type StabilityReport,
   type TaskSpec,
 } from '@dsh-agent-builder/builder'
+import { LogBus } from './logbus.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const MAX_BODY = 256 * 1024
@@ -85,11 +87,50 @@ function parseSpec(raw: unknown): TaskSpec {
   return spec
 }
 
+/** 包一层 LLM 客户端:每次调用记录耗时与体量。 */
+function loggingClient(inner: ChatClient, role: string, bus: LogBus): ChatClient {
+  return {
+    async chat(messages: readonly ChatMessage[]) {
+      const chars = messages.reduce((n, m) => n + m.content.length, 0)
+      bus.log('info', 'llm', `${role} 调用开始(输入 ${chars} 字)`)
+      const t0 = Date.now()
+      try {
+        const out = await inner.chat(messages)
+        bus.log('ok', 'llm', `${role} 返回(${Date.now() - t0}ms,输出 ${out.length} 字)`)
+        return out
+      } catch (e) {
+        bus.log('err', 'llm', `${role} 失败(${Date.now() - t0}ms):${e instanceof Error ? e.message : String(e)}`)
+        throw e
+      }
+    },
+  }
+}
+
+/** 流水线事件 → 日志条目。 */
+function pipelineLog(bus: LogBus): (e: PipelineEvent) => void {
+  return (e) => {
+    switch (e.type) {
+      case 'sample:start': bus.log('info', 'verify', `▶ ${e.sample} 开始`, e); break
+      case 'work:done': bus.log('info', 'verify', `${e.sample} 工作 agent 产出(${e.ms}ms,${e.chars} 字)`, e); break
+      case 'gate:verdict':
+        bus.log(e.passed ? 'ok' : 'warn', 'gate', `${e.sample} 门禁${e.passed ? '通过' : `拦下:${e.issues.join('、')}`}`, e); break
+      case 'review:done':
+        bus.log(e.passed ? 'ok' : 'warn', 'review', `${e.sample} ④评审${e.passed ? '通过' : `未过:${e.error ?? e.issues.join('、')}`}(${e.ms}ms)`, e); break
+      case 'sample:done':
+        bus.log(e.ok ? 'ok' : 'err', 'verify', `■ ${e.sample} 结束:${e.actual}${e.ok ? '(符合预期)' : '(不符合预期)'}`, e); break
+    }
+  }
+}
+
 /** 建 HTTP 服务(不监听,由调用方 listen)。 */
 export function createWebuiServer(options: WebuiOptions): Server {
   const outDir = options.outDir ?? resolve(here, '../../../agents')
   const pluginPath = options.pluginPath ?? resolve(here, '../../gate-plugin/dist/gate-plugin.mjs')
   const indexHtml = readFileSync(join(here, '../static/index.html'))
+  const bus = new LogBus()
+  const workClient = loggingClient(options.workClient, '工作agent', bus)
+  const reviewClient = loggingClient(options.reviewClient, '评审agent', bus)
+  bus.log('info', 'sys', '服务就绪')
 
   return createServer((req, res) => {
     void handle(req, res).catch((e: unknown) => {
@@ -102,6 +143,14 @@ export function createWebuiServer(options: WebuiOptions): Server {
     if (req.method === 'GET' && (url === '/' || url === '/index.html')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       res.end(indexHtml)
+      return
+    }
+    if (req.method === 'GET' && url === '/api/events') {
+      bus.subscribe(res)
+      return
+    }
+    if (req.method === 'GET' && url === '/api/logs') {
+      send(res, 200, { ok: true, data: { logs: bus.history() } })
       return
     }
     if (req.method !== 'POST' || !url.startsWith('/api/')) {
@@ -124,7 +173,9 @@ export function createWebuiServer(options: WebuiOptions): Server {
           if (description === '') throw new Error('请先用一句话描述你要什么')
           const feedback = typeof body.feedback === 'string' ? body.feedback.trim() : ''
           const prompt = feedback === '' ? description : `${description}\n\n用户的修改意见：${feedback}`
-          const spec = await draftSpec(options.workClient, prompt)
+          bus.log('info', 'draft', feedback === '' ? '开始整理需求' : '按修改意见重新整理')
+          const spec = await draftSpec(workClient, prompt)
+          bus.log('ok', 'draft', `规格就绪:${spec.name}(${spec.fields.length} 字段/${spec.rules.length} 规则/${spec.aiReview.length} 评审项)`, { spec })
           send(res, 200, { ok: true, data: { spec } })
           return
         }
@@ -132,11 +183,15 @@ export function createWebuiServer(options: WebuiOptions): Server {
           const spec = parseSpec(body.spec)
           const samples = parseSamples(body.samples)
           const gate = deriveGate(spec)
+          bus.log('info', 'verify', `稳定性验证开始:${samples.length} 个样例,门禁 ${gate.checks.length} 项检查`)
           const report = await runStability(spec, gate, samples, {
-            workClient: options.workClient,
-            reviewClient: options.reviewClient,
+            workClient,
+            reviewClient,
             today: localToday(),
+            onEvent: pipelineLog(bus),
           })
+          bus.log(report.matchRate === 1 ? 'ok' : 'warn', 'verify',
+            `稳定性验证结束:${report.matched}/${report.total} 符合预期`)
           send(res, 200, { ok: true, data: { report } })
           return
         }
@@ -151,6 +206,7 @@ export function createWebuiServer(options: WebuiOptions): Server {
             gateFilePath: join(outDir, spec.name, `${spec.name}.gate.yaml`),
           })
           const dshCommand = `npx -y @deepseek-ai/dsh --patch ${result.dir}/${spec.name}.preset.yaml --profile web --port 3080`
+          bus.log('ok', 'freeze', `固化完成:${result.dir}(${result.files.length} 个文件)`, { files: result.files })
           send(res, 200, { ok: true, data: { dir: result.dir, files: result.files, dshCommand } })
           return
         }

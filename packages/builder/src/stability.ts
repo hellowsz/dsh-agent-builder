@@ -39,6 +39,14 @@ export interface StabilityReport {
   readonly results: readonly SampleResult[]
 }
 
+/** 流水线过程事件(可视化/日志用)。 */
+export type PipelineEvent =
+  | { readonly type: 'sample:start'; readonly sample: string }
+  | { readonly type: 'work:done'; readonly sample: string; readonly chars: number; readonly ms: number }
+  | { readonly type: 'gate:verdict'; readonly sample: string; readonly passed: boolean; readonly issues: readonly string[] }
+  | { readonly type: 'review:done'; readonly sample: string; readonly passed: boolean; readonly issues: readonly string[]; readonly ms: number; readonly error?: string }
+  | { readonly type: 'sample:done'; readonly sample: string; readonly actual: 'pass' | 'block' | 'error'; readonly ok: boolean }
+
 export interface RunOptions {
   /** 工作 agent 用的 LLM */
   readonly workClient: ChatClient
@@ -46,6 +54,8 @@ export interface RunOptions {
   readonly reviewClient: ChatClient
   /** 固定"今天"，YYYY-MM-DD */
   readonly today: string
+  /** 过程事件回调(可选):每步实时上报,供可视化与日志 */
+  readonly onEvent?: (event: PipelineEvent) => void
 }
 
 /** 跑一个样例：工作 agent 产出 → 确定性门禁 → ④ 独立评审。 */
@@ -56,38 +66,54 @@ export async function runSample(
   options: RunOptions,
 ): Promise<SampleResult> {
   const base = { name: sample.name, expect: sample.expect }
+  const emit = options.onEvent ?? (() => undefined)
+  const finish = (r: SampleResult): SampleResult => {
+    emit({ type: 'sample:done', sample: sample.name, actual: r.actual, ok: r.ok })
+    return r
+  }
+  emit({ type: 'sample:start', sample: sample.name })
   try {
+    const t0 = Date.now()
     const answer = await options.workClient.chat([
       { role: 'system', content: deriveWorkPrompt(spec) },
       { role: 'user', content: sample.source },
     ])
+    emit({ type: 'work:done', sample: sample.name, chars: answer.length, ms: Date.now() - t0 })
     const record = extractJsonRecord(answer)
     if (record === undefined) {
-      return { ...base, actual: 'block', ok: sample.expect === 'block', issues: ['no_structured_output'] }
+      emit({ type: 'gate:verdict', sample: sample.name, passed: false, issues: ['no_structured_output'] })
+      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues: ['no_structured_output'] })
     }
     const verdict = runGate(gate, { record, source: sample.source, today: options.today })
+    emit({ type: 'gate:verdict', sample: sample.name, passed: verdict.passed, issues: verdict.issues.map((i) => i.code) })
     if (!verdict.passed) {
       const issues = verdict.issues.map((i) => i.code)
-      return { ...base, actual: 'block', ok: sample.expect === 'block', issues }
+      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues })
     }
+    const t1 = Date.now()
     const reviewed: ReviewResult = await review(options.reviewClient, {
       source: sample.source,
       record,
       items: verdict.pendingAiReview,
     })
+    const reviewIssues = reviewed.findings.filter((f) => !f.passed).map((f) => `review:${f.id}`)
+    emit({
+      type: 'review:done', sample: sample.name, passed: reviewed.passed,
+      issues: reviewIssues, ms: Date.now() - t1,
+      ...(reviewed.error !== undefined ? { error: reviewed.error } : {}),
+    })
     if (!reviewed.passed) {
-      const issues = reviewed.findings.filter((f) => !f.passed).map((f) => `review:${f.id}`)
-      return {
+      return finish({
         ...base,
         actual: 'block',
         ok: sample.expect === 'block',
-        issues: issues.length > 0 ? issues : ['review_failed'],
+        issues: reviewIssues.length > 0 ? reviewIssues : ['review_failed'],
         ...(reviewed.error !== undefined ? { reviewError: reviewed.error } : {}),
-      }
+      })
     }
-    return { ...base, actual: 'pass', ok: sample.expect === 'pass', issues: [] }
+    return finish({ ...base, actual: 'pass', ok: sample.expect === 'pass', issues: [] })
   } catch (e) {
-    return { ...base, actual: 'error', ok: false, issues: [e instanceof Error ? e.message : String(e)] }
+    return finish({ ...base, actual: 'error', ok: false, issues: [e instanceof Error ? e.message : String(e)] })
   }
 }
 

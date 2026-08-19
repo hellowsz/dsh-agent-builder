@@ -50,8 +50,10 @@ describe('webui 服务', () => {
     const res = await fetch(base + '/')
     expect(res.status).toBe(200)
     const html = await res.text()
-    expect(html).toContain('agent 搭建向导')
-    expect(html).toContain('稳定性报告')
+    expect(html).toContain('dsh-agent-builder')
+    expect(html).toContain('PIPELINE')
+    expect(html).toContain('CONSOLE')
+    expect(html).toContain('/api/events')
   })
 
   it('draft:描述 → 规格', async () => {
@@ -104,5 +106,36 @@ describe('webui 服务', () => {
   it('未知路径 404', async () => {
     const r = await post('/api/nope', {})
     expect(r.status).toBe(404)
+  })
+
+  it('日志可查:/api/logs 记录流程与 LLM 调用', async () => {
+    await post('/api/draft', { description: '帮我整理' })
+    const res = await fetch(base + '/api/logs')
+    const { data } = (await res.json()) as { data: { logs: Array<{ tag: string; msg: string }> } }
+    const tags = data.logs.map((l) => l.tag)
+    expect(tags).toContain('draft')
+    expect(tags).toContain('llm')
+    expect(data.logs.some((l) => l.msg.includes('规格就绪'))).toBe(true)
+  })
+
+  it('SSE:/api/events 是事件流并回放历史', async () => {
+    const controller = new AbortController()
+    const res = await fetch(base + '/api/events', { signal: controller.signal })
+    expect(res.headers.get('content-type')).toContain('text/event-stream')
+    const reader = res.body!.getReader()
+    const { value } = await reader.read()
+    const text = new TextDecoder().decode(value)
+    expect(text).toContain('data: ')
+    expect(text).toContain('服务就绪')
+    controller.abort()
+  })
+
+  it('verify 过程产生 gate/review 流水线日志', async () => {
+    await post('/api/verify', { spec: SPEC, samples: [{ source: '午餐 金额 428 元' }] })
+    const res = await fetch(base + '/api/logs')
+    const { data } = (await res.json()) as { data: { logs: Array<{ tag: string; msg: string }> } }
+    expect(data.logs.some((l) => l.tag === 'gate' && l.msg.includes('门禁通过'))).toBe(true)
+    expect(data.logs.some((l) => l.tag === 'review' && l.msg.includes('④评审通过'))).toBe(true)
+    expect(data.logs.some((l) => l.tag === 'verify' && l.msg.includes('符合预期'))).toBe(true)
   })
 })

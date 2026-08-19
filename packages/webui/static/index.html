@@ -3,203 +3,427 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>agent 搭建向导</title>
+<title>dsh-agent-builder</title>
 <style>
-  :root { --blue:#2563eb; --green:#16a34a; --red:#dc2626; --gray:#6b7280; --bg:#f8fafc; }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:#111827; }
-  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
-  h1 { font-size:22px; }
-  h1 small { font-size:13px; color:var(--gray); font-weight:normal; margin-left:8px; }
-  .steps { display:flex; gap:6px; margin:16px 0 24px; }
-  .steps span { flex:1; text-align:center; font-size:12px; padding:6px 2px; background:#e5e7eb; border-radius:6px; color:var(--gray); }
-  .steps span.on { background:var(--blue); color:#fff; }
-  .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin-bottom:16px; }
-  .card h2 { margin:0 0 6px; font-size:17px; }
-  .hint { color:var(--gray); font-size:13px; margin:0 0 12px; }
-  textarea { width:100%; min-height:88px; padding:10px; font-size:14px; border:1px solid #d1d5db; border-radius:8px; resize:vertical; font-family:inherit; }
-  button { padding:10px 22px; font-size:15px; border:0; border-radius:8px; background:var(--blue); color:#fff; cursor:pointer; }
-  button.secondary { background:#e5e7eb; color:#374151; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  .row { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
-  .spin { display:none; align-items:center; gap:10px; margin-top:14px; color:var(--gray); font-size:14px; }
-  .spin.on { display:flex; }
-  .dot { width:16px; height:16px; border:3px solid #dbeafe; border-top-color:var(--blue); border-radius:50%; animation:r 1s linear infinite; }
-  @keyframes r { to { transform:rotate(360deg); } }
-  .err { display:none; margin-top:12px; padding:10px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:var(--red); font-size:14px; white-space:pre-wrap; }
+  :root {
+    --bg:#0a0e14; --panel:#0e141f; --panel2:#121a28; --line:#1d2836;
+    --fg:#c9d6e4; --dim:#5c6b7d; --cyan:#22d3ee; --green:#4ade80; --red:#f87171; --amber:#fbbf24;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,"PingFang SC",monospace;
+  }
+  * { box-sizing:border-box; margin:0; }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--fg); font-family:var(--mono); font-size:13px; overflow:hidden; }
+  .app { display:grid; height:100vh; grid-template-rows:44px 1fr 240px; grid-template-columns:300px 1fr;
+         grid-template-areas:"hd hd" "rail work" "logs logs"; }
+
+  /* ── 顶栏 ── */
+  header { grid-area:hd; display:flex; align-items:center; gap:14px; padding:0 16px;
+           border-bottom:1px solid var(--line); background:var(--panel); }
+  header .brand { color:var(--cyan); font-weight:bold; letter-spacing:.5px; }
+  header .brand::before { content:"▛ "; }
+  .led { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green); }
+  .led.busy { background:var(--amber); box-shadow:0 0 6px var(--amber); animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:.3; } }
+  header .meta { color:var(--dim); font-size:12px; margin-left:auto; }
+
+  /* ── 左侧流水线 ── */
+  .rail { grid-area:rail; border-right:1px solid var(--line); background:var(--panel);
+          padding:14px 12px; overflow-y:auto; }
+  .rail h3 { color:var(--dim); font-size:11px; letter-spacing:2px; margin-bottom:12px; }
+  .node { position:relative; padding:8px 10px 8px 30px; border:1px solid var(--line); border-radius:6px;
+          margin-bottom:6px; background:var(--panel2); }
+  .node::before { content:""; position:absolute; left:11px; top:12px; width:9px; height:9px;
+                  border-radius:50%; background:var(--dim); }
+  .node .t { font-size:12px; }
+  .node .s { font-size:11px; color:var(--dim); margin-top:2px; }
+  .node.run { border-color:var(--cyan); }
+  .node.run::before { background:var(--cyan); box-shadow:0 0 8px var(--cyan); animation:blink 1s infinite; }
+  .node.ok { border-color:#1d3a2a; }
+  .node.ok::before { background:var(--green); }
+  .node.fail { border-color:#4a1d1d; }
+  .node.fail::before { background:var(--red); }
+  .link { height:12px; border-left:1px dashed var(--line); margin-left:15px; }
+  .sub { margin-left:18px; }
+  .sub .node { padding:5px 8px 5px 26px; margin-bottom:4px; }
+  .sub .node::before { left:9px; top:9px; width:7px; height:7px; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; margin:6px 0 0 18px; }
+  .chip { font-size:11px; padding:1px 8px; border:1px solid var(--line); border-radius:99px; color:var(--dim); }
+  .chip.ok { color:var(--green); border-color:#1d3a2a; }
+  .chip.fail { color:var(--red); border-color:#4a1d1d; }
+  .chip.run { color:var(--cyan); border-color:#164e5e; }
+
+  /* ── 中央工作区 ── */
+  .work { grid-area:work; overflow-y:auto; padding:18px 22px; }
+  .panel { border:1px solid var(--line); border-radius:8px; background:var(--panel); margin-bottom:14px; }
+  .panel > .cap { padding:8px 14px; border-bottom:1px solid var(--line); color:var(--cyan); font-size:12px; }
+  .panel > .cap::before { content:"$ "; color:var(--dim); }
+  .panel > .body { padding:14px; }
+  .hint { color:var(--dim); font-size:12px; margin-bottom:10px; line-height:1.6; }
+  textarea { width:100%; min-height:84px; background:#0a1018; color:var(--fg); border:1px solid var(--line);
+             border-radius:6px; padding:10px; font-family:var(--mono); font-size:13px; resize:vertical; }
+  textarea:focus { outline:none; border-color:var(--cyan); }
+  button { font-family:var(--mono); font-size:13px; padding:8px 18px; border-radius:6px; cursor:pointer;
+           background:#0d2b33; color:var(--cyan); border:1px solid #164e5e; }
+  button:hover { background:#10404d; }
+  button.ghost { background:transparent; color:var(--dim); border-color:var(--line); }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .row { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; align-items:center; }
+  .wait { display:none; color:var(--amber); font-size:12px; }
+  .wait.on { display:inline-block; animation:blink 1.2s infinite; }
+  .err { display:none; margin-top:10px; padding:8px 12px; border:1px solid #4a1d1d; border-radius:6px;
+         color:var(--red); font-size:12px; white-space:pre-wrap; }
   .err.on { display:block; }
-  ul.plan { padding-left:18px; margin:8px 0; }
-  ul.plan li { margin:4px 0; font-size:14px; }
-  .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:99px; background:#eff6ff; color:var(--blue); margin-left:6px; }
-  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:10px; }
-  th,td { border:1px solid #e5e7eb; padding:8px 10px; text-align:left; }
-  th { background:#f1f5f9; }
-  .ok { color:var(--green); font-weight:bold; }
-  .bad { color:var(--red); font-weight:bold; }
-  code.cmd { display:block; background:#0f172a; color:#e2e8f0; padding:12px; border-radius:8px; font-size:12px; overflow-x:auto; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
+  ul.plan { padding-left:18px; margin:6px 0; }
+  ul.plan li { margin:3px 0; font-size:12.5px; }
+  .tag { font-size:11px; padding:0 7px; border:1px solid var(--line); border-radius:99px; color:var(--cyan); margin-left:6px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
+  th,td { border:1px solid var(--line); padding:6px 10px; text-align:left; }
+  th { background:var(--panel2); color:var(--dim); }
+  .ok-t { color:var(--green); } .bad-t { color:var(--red); } .warn-t { color:var(--amber); }
+  code.cmd { display:block; background:#05080d; border:1px solid var(--line); color:#9fe8c8; padding:10px 12px;
+             border-radius:6px; font-size:12px; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
   .sample { margin-bottom:10px; }
-  .sample label { font-size:13px; color:var(--gray); }
+  .sample label { font-size:11px; color:var(--dim); }
+
+  /* ── 日志控制台 ── */
+  .logs { grid-area:logs; border-top:1px solid var(--line); background:#070b11; display:flex; flex-direction:column; }
+  .logbar { display:flex; gap:6px; align-items:center; padding:6px 12px; border-bottom:1px solid var(--line); }
+  .logbar .title { color:var(--dim); font-size:11px; letter-spacing:2px; margin-right:8px; }
+  .f { font-size:11px; padding:2px 10px; border-radius:99px; border:1px solid var(--line); color:var(--dim);
+       background:transparent; cursor:pointer; }
+  .f.on { color:var(--cyan); border-color:#164e5e; background:#0d2b33; }
+  .logbar .sp { margin-left:auto; }
+  .logbody { flex:1; overflow-y:auto; padding:6px 12px; font-size:12px; line-height:1.7; }
+  .lg { white-space:pre-wrap; word-break:break-all; cursor:default; }
+  .lg .ts { color:#3d4b5c; }
+  .lg .tg { display:inline-block; min-width:52px; }
+  .lg[data-l="info"] .tg { color:var(--cyan); }
+  .lg[data-l="ok"] .tg, .lg[data-l="ok"] .m { color:var(--green); }
+  .lg[data-l="warn"] .tg, .lg[data-l="warn"] .m { color:var(--amber); }
+  .lg[data-l="err"] .tg, .lg[data-l="err"] .m { color:var(--red); }
+  .lg pre { display:none; color:#7d93ab; background:#0a1018; border:1px solid var(--line); border-radius:4px;
+            padding:6px 8px; margin:2px 0 4px; font-size:11px; overflow-x:auto; }
+  .lg.open pre { display:block; }
+  .lg.has-data { cursor:pointer; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>agent 搭建向导 <small>说清要什么,得到一个稳定干活的 agent</small></h1>
-  <div class="steps">
-    <span id="tab1" class="on">1 说需求</span><span id="tab2">2 确认方案</span><span id="tab3">3 贴样例</span><span id="tab4">4 验证报告</span><span id="tab5">5 完成</span>
-  </div>
+<div class="app">
+  <header>
+    <span class="brand">dsh-agent-builder</span>
+    <span class="led" id="led"></span>
+    <span id="stateText" style="color:var(--dim);font-size:12px">idle</span>
+    <span class="meta" id="metaText">SSE 连接中…</span>
+  </header>
 
-  <div class="card" id="step1">
-    <h2>你想要一个帮你做什么的助手?</h2>
-    <p class="hint">用大白话写:给它什么、要它整理出什么。例:我把发票文字贴给它,它整理出费用项目、金额、税额、开票日期、发票号、类别(餐饮/交通/住宿/办公/其他)。金额日期发票号不能编。</p>
-    <textarea id="desc" placeholder="在这里描述……"></textarea>
-    <div class="row"><button id="btnDraft">下一步:帮我整理方案</button></div>
-    <div class="spin" id="spin1"><div class="dot"></div><span>AI 正在整理你的需求,大约需要 1 分钟,请别关页面……</span></div>
-    <div class="err" id="err1"></div>
-  </div>
-
-  <div class="card" id="step2" style="display:none">
-    <h2>方案确认</h2>
-    <p class="hint">看看下面的方案对不对。不对就写修改意见,对就确认。</p>
-    <div id="specView"></div>
-    <textarea id="feedback" placeholder="要改哪里?直接用大白话写(留空表示没意见)"></textarea>
-    <div class="row">
-      <button id="btnConfirm">✓ 就这样,下一步</button>
-      <button class="secondary" id="btnRevise">按我的意见重新整理</button>
+  <!-- 流水线 -->
+  <aside class="rail">
+    <h3>PIPELINE</h3>
+    <div class="node" id="n1"><div class="t">01 需求起草</div><div class="s" id="n1s">待开始</div></div>
+    <div class="link"></div>
+    <div class="node" id="n2"><div class="t">02 方案确认</div><div class="s" id="n2s">—</div></div>
+    <div class="link"></div>
+    <div class="node" id="n3"><div class="t">03 稳定性验证</div><div class="s" id="n3s">—</div></div>
+    <div class="sub" id="subflow" style="display:none">
+      <div class="node" id="sw"><div class="t">├ 工作 agent</div><div class="s" id="sws">—</div></div>
+      <div class="node" id="sg"><div class="t">├ 门禁 ①结构 ②规则 ③对照</div><div class="s" id="sgs">—</div></div>
+      <div class="node" id="sr"><div class="t">└ ④ 独立评审</div><div class="s" id="srs">—</div></div>
     </div>
-    <div class="spin" id="spin2"><div class="dot"></div><span>AI 正在按你的意见重新整理,大约 1 分钟……</span></div>
-    <div class="err" id="err2"></div>
-  </div>
+    <div class="chips" id="sampleChips"></div>
+    <div class="link"></div>
+    <div class="node" id="n4"><div class="t">04 固化交付</div><div class="s" id="n4s">—</div></div>
+  </aside>
 
-  <div class="card" id="step3" style="display:none">
-    <h2>贴 1-3 个真实样例</h2>
-    <p class="hint">拿真实的原文来试(比如一张真发票的文字)。样例越真,验证越靠谱。</p>
-    <div class="sample"><label>样例 1(必填)</label><textarea id="s1"></textarea></div>
-    <div class="sample"><label>样例 2(选填)</label><textarea id="s2"></textarea></div>
-    <div class="sample"><label>样例 3(选填)</label><textarea id="s3"></textarea></div>
-    <div class="row"><button id="btnVerify">开始验证</button></div>
-    <div class="spin" id="spin3"><div class="dot"></div><span>正在逐个样例试跑:AI 干活 → 机器验收 → 另一个 AI 评审。每个样例约 1-2 分钟……</span></div>
-    <div class="err" id="err3"></div>
-  </div>
-
-  <div class="card" id="step4" style="display:none">
-    <h2>稳定性报告</h2>
-    <p class="hint">这是诚实的结果:每个样例过没过、没过的原因。全过再固化最稳妥。</p>
-    <div id="reportView"></div>
-    <div class="row">
-      <button id="btnFreeze">固化这个 agent</button>
-      <button class="secondary" id="btnBack">返回改样例</button>
+  <!-- 工作区 -->
+  <main class="work">
+    <div class="panel" id="step1">
+      <div class="cap">describe — 你想要一个帮你做什么的 agent?</div>
+      <div class="body">
+        <p class="hint">用大白话写:给它什么、要它整理出什么。例:我把发票文字贴给它,它整理出费用项目、金额、税额、开票日期、发票号、类别(餐饮/交通/住宿/办公/其他)。金额日期发票号不能编。</p>
+        <textarea id="desc" placeholder="> 在这里描述……"></textarea>
+        <div class="row">
+          <button id="btnDraft">起草方案 →</button>
+          <span class="wait" id="w1">AI 整理中(约 1 分钟)…</span>
+        </div>
+        <div class="err" id="e1"></div>
+      </div>
     </div>
-    <div class="spin" id="spin4"><div class="dot"></div><span>正在固化……</span></div>
-    <div class="err" id="err4"></div>
-  </div>
 
-  <div class="card" id="step5" style="display:none">
-    <h2>🎉 完成!你的 agent 已固化</h2>
-    <div id="doneView"></div>
-    <div class="row"><button class="secondary" id="btnAgain">再搭一个</button></div>
-  </div>
+    <div class="panel" id="step2" style="display:none">
+      <div class="cap">confirm — 方案确认</div>
+      <div class="body">
+        <div id="specView"></div>
+        <textarea id="feedback" placeholder="> 要改哪里?大白话写(留空=没意见)"></textarea>
+        <div class="row">
+          <button id="btnConfirm">✓ 确认,下一步</button>
+          <button class="ghost" id="btnRevise">按意见重新整理</button>
+          <span class="wait" id="w2">重新整理中…</span>
+        </div>
+        <div class="err" id="e2"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="step3" style="display:none">
+      <div class="cap">samples — 贴 1-3 个真实样例</div>
+      <div class="body">
+        <p class="hint">拿真实原文来试。样例越真,验证越靠谱。每个样例都会走完整链路:工作 agent → 门禁 → ④评审。</p>
+        <div class="sample"><label>SAMPLE_1 (必填)</label><textarea id="s1"></textarea></div>
+        <div class="sample"><label>SAMPLE_2</label><textarea id="s2"></textarea></div>
+        <div class="sample"><label>SAMPLE_3</label><textarea id="s3"></textarea></div>
+        <div class="row">
+          <button id="btnVerify">开始验证 →</button>
+          <span class="wait" id="w3">逐样例试跑中,过程看左侧流水线与下方日志…</span>
+        </div>
+        <div class="err" id="e3"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="step4" style="display:none">
+      <div class="cap">report — 稳定性报告(诚实版)</div>
+      <div class="body">
+        <div id="reportView"></div>
+        <div class="row">
+          <button id="btnFreeze">固化这个 agent →</button>
+          <button class="ghost" id="btnBack">← 返回改样例</button>
+          <span class="wait" id="w4">固化中…</span>
+        </div>
+        <div class="err" id="e4"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="step5" style="display:none">
+      <div class="cap">done — 固化完成</div>
+      <div class="body">
+        <div id="doneView"></div>
+        <div class="row"><button class="ghost" id="btnAgain">再搭一个</button></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 日志 -->
+  <section class="logs">
+    <div class="logbar">
+      <span class="title">CONSOLE</span>
+      <button class="f on" data-f="all">ALL</button>
+      <button class="f" data-f="sys">sys</button>
+      <button class="f" data-f="draft">draft</button>
+      <button class="f" data-f="llm">llm</button>
+      <button class="f" data-f="gate">gate</button>
+      <button class="f" data-f="review">review</button>
+      <button class="f" data-f="verify">verify</button>
+      <button class="f" data-f="freeze">freeze</button>
+      <span class="sp"></span>
+      <button class="f" id="autoscroll">autoscroll:on</button>
+      <button class="f" id="clearLog">clear</button>
+    </div>
+    <div class="logbody" id="logbody"></div>
+  </section>
 </div>
 
 <script>
 'use strict';
-let spec = null, report = null;
+let spec = null, report = null, filter = 'all', autoscroll = true;
 const $ = (id) => document.getElementById(id);
-const show = (n) => {
-  for (let i = 1; i <= 5; i++) {
-    $('step' + i).style.display = i === n ? '' : 'none';
-    $('tab' + i).classList.toggle('on', i === n);
-  }
-  window.scrollTo(0, 0);
-};
-const busy = (n, on) => { $('spin' + n).classList.toggle('on', on); $('err' + n).classList.remove('on'); };
-const fail = (n, msg) => { $('err' + n).textContent = msg; $('err' + n).classList.add('on'); };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+// ── 状态机:顶栏 + 流水线节点 ──
+function busyState(on, text) {
+  $('led').classList.toggle('busy', on);
+  $('stateText').textContent = text || (on ? 'running' : 'idle');
+}
+function setNode(id, cls, sub) {
+  const n = $(id);
+  n.classList.remove('run', 'ok', 'fail');
+  if (cls) n.classList.add(cls);
+  if (sub !== undefined) $(id + 's').textContent = sub;
+}
+function resetSub() {
+  ['sw','sg','sr'].forEach((i) => { $(i).classList.remove('run','ok','fail'); $(i+'s').textContent = '—'; });
+}
+
+// ── 日志控制台(SSE) ──
+const logbody = $('logbody');
+function addLog(entry) {
+  const div = document.createElement('div');
+  div.className = 'lg';
+  div.dataset.l = entry.level;
+  div.dataset.t = entry.tag;
+  const ts = entry.ts.slice(11, 19);
+  let html = '<span class="ts">[' + ts + ']</span> <span class="tg">' + esc(entry.tag).toUpperCase() +
+             '</span> <span class="m">' + esc(entry.msg) + '</span>';
+  if (entry.data !== undefined) {
+    div.classList.add('has-data');
+    html += ' <span style="color:#3d4b5c">▸</span><pre>' + esc(JSON.stringify(entry.data, null, 2)) + '</pre>';
+    div.onclick = () => div.classList.toggle('open');
+  }
+  div.innerHTML = html;
+  div.style.display = (filter === 'all' || filter === entry.tag) ? '' : 'none';
+  logbody.appendChild(div);
+  while (logbody.children.length > 900) logbody.removeChild(logbody.firstChild);
+  if (autoscroll) logbody.scrollTop = logbody.scrollHeight;
+  routeEvent(entry);
+}
+
+// SSE 事件 → 流水线可视化
+function routeEvent(entry) {
+  const d = entry.data;
+  if (!d || !d.type) return;
+  switch (d.type) {
+    case 'sample:start':
+      $('subflow').style.display = '';
+      resetSub();
+      setNode('sw', 'run', d.sample + ' 抽取中…');
+      chip(d.sample, 'run');
+      break;
+    case 'work:done':
+      setNode('sw', 'ok', d.sample + ' 产出 ' + d.chars + ' 字 / ' + d.ms + 'ms');
+      setNode('sg', 'run', '验收中…');
+      break;
+    case 'gate:verdict':
+      setNode('sg', d.passed ? 'ok' : 'fail', d.passed ? '①②③ 全过' : '拦下: ' + d.issues.join('、'));
+      if (d.passed) setNode('sr', 'run', '评审中…');
+      break;
+    case 'review:done':
+      setNode('sr', d.passed ? 'ok' : 'fail',
+        d.passed ? '通过 / ' + d.ms + 'ms' : (d.error || d.issues.join('、')));
+      break;
+    case 'sample:done':
+      chip(d.sample, d.ok ? 'ok' : 'fail');
+      break;
+  }
+}
+const chipsBox = $('sampleChips');
+function chip(name, cls) {
+  let c = chipsBox.querySelector('[data-n="' + name + '"]');
+  if (!c) { c = document.createElement('span'); c.className = 'chip'; c.dataset.n = name; c.textContent = name; chipsBox.appendChild(c); }
+  c.classList.remove('run','ok','fail'); c.classList.add(cls);
+}
+
+function connectSSE() {
+  const es = new EventSource('/api/events');
+  es.onopen = () => { $('metaText').textContent = 'SSE ● live'; };
+  es.onmessage = (ev) => addLog(JSON.parse(ev.data));
+  es.onerror = () => { $('metaText').textContent = 'SSE ○ 重连中…'; };
+}
+connectSSE();
+
+document.querySelectorAll('.f[data-f]').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('.f[data-f]').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    filter = b.dataset.f;
+    logbody.querySelectorAll('.lg').forEach((l) => {
+      l.style.display = (filter === 'all' || filter === l.dataset.t) ? '' : 'none';
+    });
+  };
+});
+$('autoscroll').onclick = () => { autoscroll = !autoscroll; $('autoscroll').textContent = 'autoscroll:' + (autoscroll ? 'on' : 'off'); };
+$('clearLog').onclick = () => { logbody.innerHTML = ''; };
+
+// ── 向导流程 ──
+const show = (n) => { for (let i = 1; i <= 5; i++) $('step' + i).style.display = i <= n ? '' : 'none'; };
+const wait = (n, on) => { $('w' + n).classList.toggle('on', on); $('e' + n).classList.remove('on'); };
+const fail = (n, msg) => { $('e' + n).textContent = 'ERR: ' + msg; $('e' + n).classList.add('on'); };
+
 async function api(path, body) {
-  const res = await fetch(path, { method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body) });
+  const res = await fetch(path, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(body) });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || '未知错误');
   return data.data;
 }
 
 function renderSpec(s) {
-  const kindName = { text: '文字', number: '数字', date: '日期', enum: '选项' };
+  const kindName = { text:'文字', number:'数字', date:'日期', enum:'选项' };
   const fields = s.fields.map((f) =>
     '<li>' + esc(f.label) + '<span class="tag">' + (kindName[f.kind] || f.kind) +
-    (f.kind === 'enum' ? ':' + esc((f.values || []).join('/')) : '') + '</span>' +
+    (f.kind === 'enum' ? ':' + esc((f.values||[]).join('/')) : '') + '</span>' +
     (f.optional ? '<span class="tag">可空</span>' : '') + '</li>').join('');
-  const rules = s.rules.length
-    ? s.rules.map((r) => '<li>' + esc(r.message || r.id) + '</li>').join('')
-    : '<li>(无)</li>';
-  const reviews = s.aiReview.length
-    ? s.aiReview.map((a) => '<li>' + esc(a.criteria) + '</li>').join('')
-    : '<li>(无)</li>';
+  const rules = s.rules.length ? s.rules.map((r) => '<li>' + esc(r.message || r.id) + '</li>').join('') : '<li>(无)</li>';
+  const reviews = s.aiReview.length ? s.aiReview.map((a) => '<li>' + esc(a.criteria) + '</li>').join('') : '<li>(无)</li>';
   $('specView').innerHTML =
-    '<p><b>' + esc(s.title) + '</b> — ' + esc(s.description) + '</p>' +
-    '<p style="margin-bottom:2px"><b>它会整理出:</b></p><ul class="plan">' + fields + '</ul>' +
-    '<p style="margin-bottom:2px"><b>机器每次都会检查:</b></p><ul class="plan">' + rules + '</ul>' +
-    '<p style="margin-bottom:2px"><b>另请独立 AI 评审把关:</b></p><ul class="plan">' + reviews + '</ul>';
+    '<p><b style="color:var(--cyan)">' + esc(s.title) + '</b> — ' + esc(s.description) + '</p>' +
+    '<p class="hint" style="margin:8px 0 0">输出字段:</p><ul class="plan">' + fields + '</ul>' +
+    '<p class="hint" style="margin:6px 0 0">硬规则(机器每次都查):</p><ul class="plan">' + rules + '</ul>' +
+    '<p class="hint" style="margin:6px 0 0">软判断(独立 AI 评审):</p><ul class="plan">' + reviews + '</ul>';
 }
 
 function renderReport(r) {
   const rows = r.results.map((x) =>
-    '<tr><td>' + esc(x.name) + '</td><td class="' + (x.ok ? 'ok' : 'bad') + '">' + (x.ok ? '通过 ✓' : '未过 ✗') + '</td><td>' +
-    (x.issues.length ? esc(x.issues.join('、')) : '—') + '</td></tr>').join('');
+    '<tr><td>' + esc(x.name) + '</td><td class="' + (x.ok ? 'ok-t' : 'bad-t') + '">' + (x.ok ? 'PASS ✓' : 'FAIL ✗') +
+    '</td><td>' + (x.issues.length ? esc(x.issues.join('、')) : '—') + '</td></tr>').join('');
   const pct = Math.round(r.matchRate * 100);
   $('reportView').innerHTML =
-    '<p>' + r.total + ' 个样例,' + r.matched + ' 个符合预期(<b class="' + (pct === 100 ? 'ok' : 'bad') + '">' + pct + '%</b>)</p>' +
-    '<table><tr><th>样例</th><th>结果</th><th>问题</th></tr>' + rows + '</table>' +
-    (pct < 100 ? '<p class="hint" style="margin-top:10px">有样例没过。建议返回改样例或修改方案;执意固化也可以,但要知道这些情况会翻车。</p>' : '');
+    '<p>' + r.total + ' 个样例 / ' + r.matched + ' 个符合预期 → <b class="' + (pct === 100 ? 'ok-t' : 'warn-t') + '">' + pct + '%</b></p>' +
+    '<table><tr><th>SAMPLE</th><th>RESULT</th><th>ISSUES</th></tr>' + rows + '</table>' +
+    (pct < 100 ? '<p class="hint" style="margin-top:8px">有样例没过。建议返回调整;执意固化也行,但这些情况会翻车。</p>' : '');
 }
 
 $('btnDraft').onclick = async () => {
   const description = $('desc').value.trim();
   if (!description) return fail(1, '请先写一句描述');
-  busy(1, true); $('btnDraft').disabled = true;
-  try { spec = (await api('/api/draft', { description })).spec; renderSpec(spec); show(2); }
-  catch (e) { fail(1, e.message); }
-  finally { busy(1, false); $('btnDraft').disabled = false; }
+  wait(1, true); $('btnDraft').disabled = true; busyState(true, 'drafting');
+  setNode('n1', 'run', '起草中…');
+  try {
+    spec = (await api('/api/draft', { description })).spec;
+    renderSpec(spec);
+    setNode('n1', 'ok', spec.name); setNode('n2', 'run', '等你确认');
+    show(2);
+  } catch (e) { fail(1, e.message); setNode('n1', 'fail', '失败'); }
+  finally { wait(1, false); $('btnDraft').disabled = false; busyState(false); }
 };
 
 $('btnRevise').onclick = async () => {
   const feedback = $('feedback').value.trim();
-  if (!feedback) return fail(2, '请先写修改意见,或直接点「就这样」');
-  busy(2, true);
-  try { spec = (await api('/api/draft', { description: $('desc').value.trim(), feedback })).spec; renderSpec(spec); $('feedback').value = ''; }
-  catch (e) { fail(2, e.message); }
-  finally { busy(2, false); }
+  if (!feedback) return fail(2, '请先写修改意见,或直接点确认');
+  wait(2, true); busyState(true, 'revising'); setNode('n1', 'run', '按意见重整…');
+  try {
+    spec = (await api('/api/draft', { description: $('desc').value.trim(), feedback })).spec;
+    renderSpec(spec); $('feedback').value = '';
+    setNode('n1', 'ok', spec.name);
+  } catch (e) { fail(2, e.message); }
+  finally { wait(2, false); busyState(false); }
 };
 
-$('btnConfirm').onclick = () => show(3);
+$('btnConfirm').onclick = () => { setNode('n2', 'ok', '已确认'); setNode('n3', 'run', '等样例'); show(3); };
 
 $('btnVerify').onclick = async () => {
-  const samples = [$('s1').value, $('s2').value, $('s3').value]
-    .map((v) => v.trim()).filter(Boolean).map((source) => ({ source }));
+  const samples = [$('s1').value, $('s2').value, $('s3').value].map((v) => v.trim()).filter(Boolean).map((source) => ({ source }));
   if (!samples.length) return fail(3, '至少贴一个样例');
-  busy(3, true); $('btnVerify').disabled = true;
-  try { report = (await api('/api/verify', { spec, samples })).report; renderReport(report); show(4); }
-  catch (e) { fail(3, e.message); }
-  finally { busy(3, false); $('btnVerify').disabled = false; }
+  wait(3, true); $('btnVerify').disabled = true; busyState(true, 'verifying');
+  chipsBox.innerHTML = ''; setNode('n3', 'run', samples.length + ' 个样例试跑中…');
+  try {
+    report = (await api('/api/verify', { spec, samples })).report;
+    renderReport(report);
+    setNode('n3', report.matchRate === 1 ? 'ok' : 'fail', Math.round(report.matchRate * 100) + '% 符合预期');
+    setNode('n4', 'run', '等你固化'); show(4);
+  } catch (e) { fail(3, e.message); setNode('n3', 'fail', '失败'); }
+  finally { wait(3, false); $('btnVerify').disabled = false; busyState(false); }
 };
 
 $('btnBack').onclick = () => show(3);
 
 $('btnFreeze').onclick = async () => {
-  busy(4, true); $('btnFreeze').disabled = true;
+  wait(4, true); $('btnFreeze').disabled = true; busyState(true, 'freezing'); setNode('n4', 'run', '固化中…');
   try {
     const d = await api('/api/freeze', { spec, report });
     $('doneView').innerHTML =
-      '<p>产物已保存到:</p><code class="cmd">' + esc(d.dir) + '</code>' +
+      '<p class="ok-t">产物目录:</p><code class="cmd">' + esc(d.dir) + '</code>' +
       '<ul class="plan">' + d.files.map((f) => '<li>' + esc(f) + '</li>').join('') + '</ul>' +
-      '<p>在 DeepSeek Harness 里启动它(终端里执行,然后打开 http://127.0.0.1:3080):</p>' +
+      '<p class="hint">在 DeepSeek Harness 里启动(终端执行后开 http://127.0.0.1:3080,直接贴原文即可,提示词已自动注入):</p>' +
       '<code class="cmd">' + esc(d.dshCommand) + '</code>' +
-      '<p class="hint">以后每次产出都会先过验收门禁:不合格自动打回重做,重试用尽会如实告知。</p>';
-    show(5);
-  } catch (e) { fail(4, e.message); }
-  finally { busy(4, false); $('btnFreeze').disabled = false; }
+      '<p class="hint">运行时每次产出都过四层门禁:不合格自动打回重做,重试用尽如实告知。</p>';
+    setNode('n4', 'ok', '已交付'); show(5);
+  } catch (e) { fail(4, e.message); setNode('n4', 'fail', '失败'); }
+  finally { wait(4, false); $('btnFreeze').disabled = false; busyState(false); }
 };
 
-$('btnAgain').onclick = () => { spec = null; report = null; $('desc').value = ''; ['s1','s2','s3'].forEach((i) => $(i).value = ''); show(1); };
+$('btnAgain').onclick = () => {
+  spec = null; report = null;
+  $('desc').value = ''; ['s1','s2','s3'].forEach((i) => $(i).value = '');
+  ['n1','n2','n3','n4'].forEach((i) => setNode(i, null, '—'));
+  setNode('n1', null, '待开始'); resetSub(); $('subflow').style.display = 'none'; chipsBox.innerHTML = '';
+  show(1);
+};
 </script>
 </body>
 </html>

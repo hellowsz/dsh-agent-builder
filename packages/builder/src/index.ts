@@ -10,6 +10,7 @@ export {
   type Sample,
   type SampleResult,
   type StabilityReport,
+  type PipelineEvent,
   type RunOptions,
 } from './stability.js'
 export { freeze, type FreezeResult } from './freeze.js'
