@@ -14,12 +14,15 @@ const makeClient = (): ChatClient => (apiKey !== '' ? createDeepSeekClient({ api
 const port = Number.parseInt(env.PORT ?? '4173', 10)
 const host = env.AB_HOST ?? '127.0.0.1'
 
+// 部署环境:服务器上 :3080 已被常驻 Harness 占用,一键使用直接指向它,不再本地起 dsh
+const launchUrl = env.AB_LAUNCH_URL
 const opts: WebuiOptions = {
   workClient: makeClient(),
   reviewClient: makeClient(),
   ...(env.AB_SESSIONS_DIR !== undefined ? { sessionsDir: env.AB_SESSIONS_DIR } : {}),
   ...(env.AB_OUT_DIR !== undefined ? { outDir: env.AB_OUT_DIR } : {}),
   ...(env.AB_PLUGIN_PATH !== undefined ? { pluginPath: env.AB_PLUGIN_PATH } : {}),
+  ...(launchUrl !== undefined ? { launcher: async () => launchUrl } : {}),
 }
 const server = createWebuiServer(opts)
 
