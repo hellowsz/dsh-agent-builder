@@ -123,7 +123,7 @@
     <div class="link"></div>
     <div class="node" id="n2"><div class="t">02 方案确认</div><div class="s" id="n2s">—</div></div>
     <div class="link"></div>
-    <div class="node" id="n3"><div class="t">03 稳定性验证</div><div class="s" id="n3s">—</div></div>
+    <div class="node" id="n3"><div class="t">03 自动探索验证</div><div class="s" id="n3s">—</div></div>
     <div class="sub" id="subflow" style="display:none">
       <div class="node" id="sw"><div class="t">├ 工作 agent</div><div class="s" id="sws">—</div></div>
       <div class="node" id="sg"><div class="t">├ 门禁 ①结构 ②规则 ③对照</div><div class="s" id="sgs">—</div></div>
@@ -155,7 +155,7 @@
         <div id="specView"></div>
         <textarea id="feedback" placeholder="> 要改哪里?大白话写(留空=没意见)"></textarea>
         <div class="row">
-          <button id="btnConfirm">✓ 确认,下一步</button>
+          <button id="btnConfirm">✓ 确认,自动探索验证 →</button>
           <button class="ghost" id="btnRevise">按意见重新整理</button>
           <span class="wait" id="w2">重新整理中…</span>
         </div>
@@ -164,29 +164,29 @@
     </div>
 
     <div class="panel" id="step3" style="display:none">
-      <div class="cap">samples — 贴 1-3 个真实样例</div>
+      <div class="cap">explore — 自动探索验证(无需你出题)</div>
       <div class="body">
-        <p class="hint">拿真实原文来试。样例越真,验证越靠谱。每个样例都会走完整链路:工作 agent → 门禁 → ④评审。</p>
-        <div class="sample"><label>SAMPLE_1 (必填)</label><textarea id="s1"></textarea></div>
-        <div class="sample"><label>SAMPLE_2</label><textarea id="s2"></textarea></div>
-        <div class="sample"><label>SAMPLE_3</label><textarea id="s3"></textarea></div>
-        <div class="row">
-          <button id="btnVerify">开始验证 →</button>
-          <span class="wait" id="w3">逐样例试跑中,过程看左侧流水线与下方日志…</span>
-        </div>
+        <p class="hint">AI 正在:自己编造真实感样例(含无关反例)→ 工作 agent 试跑 → 门禁验收 → ④独立评审。过程看左侧流水线与下方日志,你只需等结果。</p>
+        <div class="row"><span class="wait on" id="w3">自动探索中(约 2-5 分钟)…</span></div>
         <div class="err" id="e3"></div>
       </div>
     </div>
 
     <div class="panel" id="step4" style="display:none">
-      <div class="cap">report — 稳定性报告(诚实版)</div>
+      <div class="cap">confirm-output — 产物确认(看结果点头就行)</div>
       <div class="body">
         <div id="reportView"></div>
+        <div id="productView"></div>
+        <p class="hint" style="margin-top:10px">⚠ 以上样例是 AI 编造的。想更放心,可补充你自己的真实原文再跑一轮(选填):</p>
+        <textarea id="extraSamples" placeholder="> 每行一条真实原文(留空跳过)" style="min-height:56px"></textarea>
         <div class="row">
-          <button id="btnFreeze">固化这个 agent →</button>
-          <button class="ghost" id="btnBack">← 返回改样例</button>
-          <span class="wait" id="w4">固化中…</span>
+          <button id="btnFreeze">产物没问题,固化 →</button>
+          <button class="ghost" id="btnReExplore">带上我的真实样例再跑一轮</button>
+          <span class="wait" id="w4">运行中…</span>
         </div>
+        <p class="hint" style="margin-top:12px">产物不对?写意见,AI 会改方案并重新探索:</p>
+        <textarea id="outputFeedback" placeholder="> 比如:金额应该不含税 / 少了一个字段…" style="min-height:48px"></textarea>
+        <div class="row"><button class="ghost" id="btnFixSpec">按意见改方案并重新探索</button></div>
         <div class="err" id="e4"></div>
       </div>
     </div>
@@ -349,13 +349,36 @@ function renderSpec(s) {
 
 function renderReport(r) {
   const rows = r.results.map((x) =>
-    '<tr><td>' + esc(x.name) + '</td><td class="' + (x.ok ? 'ok-t' : 'bad-t') + '">' + (x.ok ? 'PASS ✓' : 'FAIL ✗') +
+    '<tr><td>' + esc(x.name) + '</td><td>' + esc(x.expect === 'block' ? '应被拦下' : '应通过') +
+    '</td><td class="' + (x.ok ? 'ok-t' : 'bad-t') + '">' + (x.ok ? 'PASS ✓' : 'FAIL ✗') +
     '</td><td>' + (x.issues.length ? esc(x.issues.join('、')) : '—') + '</td></tr>').join('');
   const pct = Math.round(r.matchRate * 100);
   $('reportView').innerHTML =
     '<p>' + r.total + ' 个样例 / ' + r.matched + ' 个符合预期 → <b class="' + (pct === 100 ? 'ok-t' : 'warn-t') + '">' + pct + '%</b></p>' +
-    '<table><tr><th>SAMPLE</th><th>RESULT</th><th>ISSUES</th></tr>' + rows + '</table>' +
-    (pct < 100 ? '<p class="hint" style="margin-top:8px">有样例没过。建议返回调整;执意固化也行,但这些情况会翻车。</p>' : '');
+    '<table><tr><th>SAMPLE</th><th>预期</th><th>RESULT</th><th>ISSUES</th></tr>' + rows + '</table>';
+}
+
+function renderProducts(samples, r) {
+  const bySource = {};
+  samples.forEach((s) => { bySource[s.name] = s.source; });
+  const labelOf = {};
+  (spec.fields || []).forEach((f) => { labelOf[f.name] = f.label; });
+  const cards = r.results.map((x) => {
+    let inner = '<p class="hint" style="margin:0 0 4px">输入原文:</p>' +
+      '<code class="cmd" style="color:#9db4cc;margin-top:0">' + esc(bySource[x.name] || '') + '</code>';
+    if (x.record) {
+      const rows = Object.entries(x.record).map(([k, v]) =>
+        '<tr><td>' + esc(labelOf[k] || k) + '</td><td>' + esc(v === null ? '(空)' : String(v)) + '</td></tr>').join('');
+      inner += '<p class="hint" style="margin:8px 0 0">最终产物:</p><table>' + rows + '</table>';
+    } else {
+      inner += '<p class="hint" style="margin:8px 0 0">最终产物:(被拦下,无产物' + (x.expect === 'block' ? ' — 符合预期,系统拒绝了无关输入' : '') + ')</p>';
+    }
+    const badge = x.ok ? '<span class="tag" style="color:var(--green);border-color:#1d3a2a">符合预期</span>'
+                       : '<span class="tag" style="color:var(--red);border-color:#4a1d1d">不符合预期</span>';
+    return '<div class="panel" style="margin-top:10px"><div class="cap">' + esc(x.name) + ' ' + badge +
+           '</div><div class="body">' + inner + '</div></div>';
+  }).join('');
+  $('productView').innerHTML = cards;
 }
 
 $('btnDraft').onclick = async () => {
@@ -384,23 +407,44 @@ $('btnRevise').onclick = async () => {
   finally { wait(2, false); busyState(false); }
 };
 
-$('btnConfirm').onclick = () => { setNode('n2', 'ok', '已确认'); setNode('n3', 'run', '等样例'); show(3); };
-
-$('btnVerify').onclick = async () => {
-  const samples = [$('s1').value, $('s2').value, $('s3').value].map((v) => v.trim()).filter(Boolean).map((source) => ({ source }));
-  if (!samples.length) return fail(3, '至少贴一个样例');
-  wait(3, true); $('btnVerify').disabled = true; busyState(true, 'verifying');
-  chipsBox.innerHTML = ''; setNode('n3', 'run', samples.length + ' 个样例试跑中…');
+// 自动探索:确认方案即触发,无需用户出题
+async function runExplore(extra) {
+  show(3); wait(3, true); busyState(true, 'exploring');
+  chipsBox.innerHTML = ''; resetSub(); $('subflow').style.display = 'none';
+  setNode('n3', 'run', 'AI 自造样例并试跑中…');
   try {
-    report = (await api('/api/verify', { spec, samples })).report;
-    renderReport(report);
+    const body = { spec };
+    if (extra && extra.length) body.samples = extra.map((source) => ({ source }));
+    const d = await api('/api/explore', body);
+    report = d.report; exploreSamples = d.samples;
+    renderReport(report); renderProducts(exploreSamples, report);
     setNode('n3', report.matchRate === 1 ? 'ok' : 'fail', Math.round(report.matchRate * 100) + '% 符合预期');
-    setNode('n4', 'run', '等你固化'); show(4);
-  } catch (e) { fail(3, e.message); setNode('n3', 'fail', '失败'); }
-  finally { wait(3, false); $('btnVerify').disabled = false; busyState(false); }
+    setNode('n4', 'run', '等你确认产物'); show(4);
+  } catch (e) {
+    fail(3, e.message); setNode('n3', 'fail', '失败');
+  } finally { wait(3, false); busyState(false); }
+}
+let exploreSamples = [];
+
+$('btnConfirm').onclick = () => { setNode('n2', 'ok', '已确认'); runExplore(); };
+
+$('btnReExplore').onclick = () => {
+  const extra = $('extraSamples').value.split('\n').map((v) => v.trim()).filter(Boolean);
+  runExplore(extra);
 };
 
-$('btnBack').onclick = () => show(3);
+$('btnFixSpec').onclick = async () => {
+  const feedback = $('outputFeedback').value.trim();
+  if (!feedback) return fail(4, '请先写产物哪里不对');
+  wait(4, true); busyState(true, 'revising'); setNode('n1', 'run', '按产物意见改方案…');
+  try {
+    spec = (await api('/api/draft', { description: $('desc').value.trim(), feedback })).spec;
+    renderSpec(spec); $('outputFeedback').value = '';
+    setNode('n1', 'ok', spec.name); setNode('n2', 'ok', '已按意见更新');
+    await runExplore();
+  } catch (e) { fail(4, e.message); }
+  finally { wait(4, false); busyState(false); }
+};
 
 $('btnFreeze').onclick = async () => {
   wait(4, true); $('btnFreeze').disabled = true; busyState(true, 'freezing'); setNode('n4', 'run', '固化中…');
@@ -418,8 +462,8 @@ $('btnFreeze').onclick = async () => {
 };
 
 $('btnAgain').onclick = () => {
-  spec = null; report = null;
-  $('desc').value = ''; ['s1','s2','s3'].forEach((i) => $(i).value = '');
+  spec = null; report = null; exploreSamples = [];
+  $('desc').value = ''; $('extraSamples').value = ''; $('outputFeedback').value = '';
   ['n1','n2','n3','n4'].forEach((i) => setNode(i, null, '—'));
   setNode('n1', null, '待开始'); resetSub(); $('subflow').style.display = 'none'; chipsBox.innerHTML = '';
   show(1);

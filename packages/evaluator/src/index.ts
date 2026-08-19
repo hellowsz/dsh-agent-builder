@@ -4,7 +4,7 @@
  * 评审 LLM 输出必须是 JSON；解析失败按"评审失败"处理，绝不静默放行。
  */
 import { extractJsonRecord, type AiReviewItem } from '@dsh-agent-builder/gate-engine'
-import { type ChatClient } from './llm.js'
+import { type ChatClient, type ChatMessage } from './llm.js'
 
 export { createDeepSeekClient, type ChatClient, type ChatMessage, type DeepSeekConfig } from './llm.js'
 export { createDshHeadlessClient, type DshHeadlessConfig } from './dsh-client.js'
@@ -77,17 +77,29 @@ function parseFindings(text: string, items: readonly AiReviewItem[]): readonly R
   return out
 }
 
-/** 跑一次独立评审。items 为空直接通过（没有 ④ 条目要评）。 */
+/**
+ * 跑一次独立评审。items 为空直接通过（没有 ④ 条目要评）。
+ * 评审 LLM 输出不合格式时纠偏重问一次(明确指出问题),仍不行才判评审失败。
+ */
 export async function review(client: ChatClient, input: ReviewInput): Promise<ReviewResult> {
   if (input.items.length === 0) return { passed: true, findings: [] }
-  try {
-    const text = await client.chat([
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: buildUserPrompt(input) },
-    ])
-    const findings = parseFindings(text, input.items)
-    return { passed: findings.every((f) => f.passed), findings }
-  } catch (e) {
-    return { passed: false, findings: [], error: e instanceof Error ? e.message : String(e) }
+  const base: ChatMessage[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'user', content: buildUserPrompt(input) },
+  ]
+  let lastError = ''
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const messages: ChatMessage[] =
+      attempt === 1
+        ? base
+        : [...base, { role: 'user', content: `你上一次的输出不符合要求（${lastError}）。请严格只输出 JSON，格式 {"findings":[{"id":"...","passed":true|false,"reason":"..."}]}，每条标准都要有结论，不要输出任何解释文字。` }]
+    try {
+      const text = await client.chat(messages)
+      const findings = parseFindings(text, input.items)
+      return { passed: findings.every((f) => f.passed), findings }
+    } catch (e) {
+      lastError = e instanceof Error ? e.message : String(e)
+    }
   }
+  return { passed: false, findings: [], error: lastError }
 }

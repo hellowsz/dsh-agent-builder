@@ -14,3 +14,4 @@ export {
   type RunOptions,
 } from './stability.js'
 export { freeze, type FreezeResult } from './freeze.js'
+export { generateSamples } from './explore.js'

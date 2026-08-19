@@ -28,6 +28,8 @@ export interface SampleResult {
   readonly ok: boolean
   readonly issues: readonly string[]
   readonly reviewError?: string
+  /** 工作 agent 的最终产物(抽到 JSON 才有),供用户确认 */
+  readonly record?: Readonly<Record<string, unknown>>
 }
 
 /** 稳定性报告。 */
@@ -88,7 +90,7 @@ export async function runSample(
     emit({ type: 'gate:verdict', sample: sample.name, passed: verdict.passed, issues: verdict.issues.map((i) => i.code) })
     if (!verdict.passed) {
       const issues = verdict.issues.map((i) => i.code)
-      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues })
+      return finish({ ...base, actual: 'block', ok: sample.expect === 'block', issues, record })
     }
     const t1 = Date.now()
     const reviewed: ReviewResult = await review(options.reviewClient, {
@@ -108,10 +110,11 @@ export async function runSample(
         actual: 'block',
         ok: sample.expect === 'block',
         issues: reviewIssues.length > 0 ? reviewIssues : ['review_failed'],
+        record,
         ...(reviewed.error !== undefined ? { reviewError: reviewed.error } : {}),
       })
     }
-    return finish({ ...base, actual: 'pass', ok: sample.expect === 'pass', issues: [] })
+    return finish({ ...base, actual: 'pass', ok: sample.expect === 'pass', issues: [], record })
   } catch (e) {
     return finish({ ...base, actual: 'error', ok: false, issues: [e instanceof Error ? e.message : String(e)] })
   }

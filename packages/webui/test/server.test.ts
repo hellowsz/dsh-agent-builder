@@ -23,6 +23,12 @@ const workClient: ChatClient = {
   chat: async (messages) => {
     const system = messages.find((m) => m.role === 'system')?.content ?? ''
     if (system.includes('任务规格')) return JSON.stringify(SPEC)
+    if (system.includes('测试样例设计师')) {
+      return '{"good":["午餐 金额 428 元","打车 金额 56 元"],"bad":["今天天气不错"]}'
+    }
+    const user = messages.at(-1)?.content ?? ''
+    if (user.includes('天气')) return '这段文字里没有可整理的信息。'
+    if (user.includes('56')) return '```json\n{"amount": 56, "note": "打车"}\n```'
     return '```json\n{"amount": 428, "note": "午餐"}\n```'
   },
 }
@@ -101,6 +107,22 @@ describe('webui 服务', () => {
     const r = await post('/api/freeze', { spec: SPEC })
     expect(r.status).toBe(400)
     expect(r.body.error).toContain('报告')
+  })
+
+  it('explore:自动探索——AI 自造样例跑全链路,产物随报告返回', async () => {
+    const r = await post('/api/explore', { spec: SPEC })
+    expect(r.status).toBe(200)
+    const data = r.body.data as { samples: Array<{ name: string; expect: string }>; report: { matchRate: number; results: Array<{ record?: unknown }> } }
+    expect(data.samples.map((x) => x.expect)).toEqual(['pass', 'pass', 'block'])
+    expect(data.report.matchRate).toBe(1)
+    expect(data.report.results[0]!.record).toMatchObject({ amount: 428 })
+    expect(data.report.results[2]!.record).toBeUndefined() // 反例被拦,无产物
+  })
+
+  it('explore:可附加用户真实样例一起跑', async () => {
+    const r = await post('/api/explore', { spec: SPEC, samples: [{ source: '午餐 金额 428 元' }] })
+    const data = r.body.data as { samples: Array<{ name: string }> }
+    expect(data.samples.some((x) => x.name === '真实样例1')).toBe(true)
   })
 
   it('未知路径 404', async () => {

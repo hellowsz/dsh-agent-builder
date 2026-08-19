@@ -44,10 +44,24 @@ describe('④ 独立评审', () => {
     expect(r.error).toContain('note_sensible')
   })
 
-  it('评审输出不是 JSON → 评审失败', async () => {
+  it('评审输出不是 JSON → 纠偏重问仍失败则判评审失败', async () => {
     const r = await review(fake('我觉得都挺好'), INPUT)
     expect(r.passed).toBe(false)
     expect(r.error).toBeDefined()
+  })
+
+  it('第一次输出非 JSON → 纠偏重问后成功(真模型回归:长文本下评审爱说大白话)', async () => {
+    const answers = [
+      '经过仔细评审,我认为这两项都没有问题。',
+      '{"findings":[{"id":"category_sensible","passed":true,"reason":"ok"},{"id":"note_sensible","passed":true,"reason":"ok"}]}',
+    ]
+    const prompts: string[][] = []
+    const client: ChatClient = {
+      chat: async (m) => { prompts.push(m.map((x) => x.content)); return answers.shift()! },
+    }
+    const r = await review(client, INPUT)
+    expect(r.passed).toBe(true)
+    expect(prompts[1]!.at(-1)).toContain('只输出 JSON')
   })
 
   it('网络异常 → 评审失败，错误透出', async () => {

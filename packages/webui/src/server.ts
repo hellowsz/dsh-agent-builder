@@ -11,6 +11,7 @@ import {
   deriveGate,
   draftSpec,
   freeze,
+  generateSamples,
   runStability,
   validateSpec,
   type PipelineEvent,
@@ -65,17 +66,18 @@ function localToday(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function parseSamples(raw: unknown): Sample[] {
+function parseSamples(raw: unknown, required: boolean): Sample[] {
+  if (raw === undefined && !required) return []
   if (!Array.isArray(raw)) throw new Error('samples 必须是数组')
   const samples = raw
     .filter((s): s is { source?: unknown } => typeof s === 'object' && s !== null)
     .map((s, i) => ({
-      name: `样例${i + 1}`,
+      name: `真实样例${i + 1}`,
       source: typeof s.source === 'string' ? s.source.trim() : '',
       expect: 'pass' as const,
     }))
     .filter((s) => s.source !== '')
-  if (samples.length === 0) throw new Error('至少要一个非空样例')
+  if (required && samples.length === 0) throw new Error('至少要一个非空样例')
   return samples
 }
 
@@ -179,9 +181,31 @@ export function createWebuiServer(options: WebuiOptions): Server {
           send(res, 200, { ok: true, data: { spec } })
           return
         }
+        case '/api/explore': {
+          const spec = parseSpec(body.spec)
+          const extra = parseSamples(body.samples, false)
+          bus.log('info', 'explore', '样例自探索:AI 正在编造真实感样例(正例+无关反例)')
+          const generated = await generateSamples(workClient, spec, 2)
+          const samples = [...generated, ...extra]
+          bus.log('ok', 'explore',
+            `样例就绪:${generated.length} 条自造${extra.length > 0 ? ` + ${extra.length} 条用户真实样例` : ''}`,
+            { samples: samples.map((x) => ({ name: x.name, expect: x.expect, source: x.source })) })
+          const gate = deriveGate(spec)
+          bus.log('info', 'verify', `稳定性验证开始:${samples.length} 个样例,门禁 ${gate.checks.length} 项检查`)
+          const report = await runStability(spec, gate, samples, {
+            workClient,
+            reviewClient,
+            today: localToday(),
+            onEvent: pipelineLog(bus),
+          })
+          bus.log(report.matchRate === 1 ? 'ok' : 'warn', 'verify',
+            `稳定性验证结束:${report.matched}/${report.total} 符合预期`)
+          send(res, 200, { ok: true, data: { samples, report } })
+          return
+        }
         case '/api/verify': {
           const spec = parseSpec(body.spec)
-          const samples = parseSamples(body.samples)
+          const samples = parseSamples(body.samples, true)
           const gate = deriveGate(spec)
           bus.log('info', 'verify', `稳定性验证开始:${samples.length} 个样例,门禁 ${gate.checks.length} 项检查`)
           const report = await runStability(spec, gate, samples, {
