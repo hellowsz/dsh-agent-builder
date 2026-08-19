@@ -154,6 +154,7 @@ export function createWebuiServer(options: WebuiOptions): Server {
   const outDir = options.outDir ?? resolve(here, '../../../agents')
   const pluginPath = options.pluginPath ?? resolve(here, '../../gate-plugin/dist/gate-plugin.mjs')
   const indexHtml = readFileSync(join(here, '../static/index.html'))
+  const landingHtml = readFileSync(join(here, '../static/landing.html'))
   const bus = new LogBus()
   const workClient = loggingClient(options.workClient, '工作agent', bus)
   const reviewClient = loggingClient(options.reviewClient, '评审agent', bus)
@@ -205,6 +206,11 @@ export function createWebuiServer(options: WebuiOptions): Server {
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = req.url ?? '/'
     if (req.method === 'GET' && (url === '/' || url === '/index.html')) {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+      res.end(landingHtml)
+      return
+    }
+    if (req.method === 'GET' && (url === '/app' || url === '/app.html')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       res.end(indexHtml)
       return

@@ -75,11 +75,18 @@ async function post(path: string, body: unknown) {
 describe('webui 服务(任务制)', () => {
   let taskId = ''
 
-  it('GET / 返回向导页', async () => {
+  it('GET / 返回落地页(主能力入口)', async () => {
     const res = await fetch(base + '/')
     expect(res.status).toBe(200)
     const html = await res.text()
-    expect(html).toContain('dsh-agent-builder')
+    expect(html).toContain('能稳定交付结果')
+    expect(html).toContain('/app')
+  })
+
+  it('GET /app 返回工作台', async () => {
+    const res = await fetch(base + '/app')
+    expect(res.status).toBe(200)
+    const html = await res.text()
     expect(html).toContain('PIPELINE')
     expect(html).toContain('CONSOLE')
     expect(html).toContain('/api/events')

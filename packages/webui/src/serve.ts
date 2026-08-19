@@ -1,19 +1,29 @@
 #!/usr/bin/env node
 /**
- * 启动网页向导。模型通道与 CLI 同策略:有 DEEPSEEK_API_KEY 直连,否则回落本机 dsh headless。
- * 只监听 127.0.0.1;端口取 PORT 环境变量,默认 4173。
+ * 启动网页向导。模型通道:有 DEEPSEEK_API_KEY 直连,否则回落 dsh headless。
+ * 目录/端口/插件路径可用环境变量覆盖,便于服务器部署:
+ *   PORT, AB_HOST, AB_SESSIONS_DIR, AB_OUT_DIR, AB_PLUGIN_PATH
  */
 import { env, stdout } from 'node:process'
 import { createDeepSeekClient, createDshHeadlessClient, type ChatClient } from '@dsh-agent-builder/evaluator'
-import { createWebuiServer } from './server.js'
+import { createWebuiServer, type WebuiOptions } from './server.js'
 
 const apiKey = env.DEEPSEEK_API_KEY ?? ''
 const makeClient = (): ChatClient => (apiKey !== '' ? createDeepSeekClient({ apiKey }) : createDshHeadlessClient())
 
 const port = Number.parseInt(env.PORT ?? '4173', 10)
-const server = createWebuiServer({ workClient: makeClient(), reviewClient: makeClient() })
+const host = env.AB_HOST ?? '127.0.0.1'
 
-server.listen(port, '127.0.0.1', () => {
-  stdout.write(`模型通道:${apiKey !== '' ? 'DeepSeek 直连' : '本机 dsh headless(每步约 1-2 分钟,页面会提示)'}\n`)
-  stdout.write(`网页向导已启动:http://127.0.0.1:${port}\n`)
+const opts: WebuiOptions = {
+  workClient: makeClient(),
+  reviewClient: makeClient(),
+  ...(env.AB_SESSIONS_DIR !== undefined ? { sessionsDir: env.AB_SESSIONS_DIR } : {}),
+  ...(env.AB_OUT_DIR !== undefined ? { outDir: env.AB_OUT_DIR } : {}),
+  ...(env.AB_PLUGIN_PATH !== undefined ? { pluginPath: env.AB_PLUGIN_PATH } : {}),
+}
+const server = createWebuiServer(opts)
+
+server.listen(port, host, () => {
+  stdout.write(`模型通道:${apiKey !== '' ? 'DeepSeek 直连' : 'dsh headless'}\n`)
+  stdout.write(`agent-builder 已启动:http://${host}:${port}\n`)
 })

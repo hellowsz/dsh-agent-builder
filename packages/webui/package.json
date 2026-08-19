@@ -6,7 +6,8 @@
   "main": "src/server.ts",
   "scripts": {
     "test": "vitest run",
-    "serve": "tsx src/serve.ts"
+    "serve": "tsx src/serve.ts",
+    "build": "esbuild src/serve.ts --bundle --format=esm --platform=node --target=node22 --banner:js=\"import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);\" --outfile=dist/server.mjs"
   },
   "dependencies": {
     "@dsh-agent-builder/builder": "workspace:*",
@@ -17,6 +18,7 @@
     "typescript": "^5.6.3",
     "vitest": "^2.1.8",
     "tsx": "^4.19.2",
-    "@types/node": "^22.10.0"
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.0"
   }
 }

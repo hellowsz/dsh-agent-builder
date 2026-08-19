@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent-builder · 稳定交付的 AI agent</title>
+<style>
+  :root { --bg:#0a0e14; --panel:#0e141f; --line:#1d2836; --fg:#c9d6e4; --dim:#6b7d90; --cyan:#22d3ee; --green:#4ade80; --amber:#fbbf24; --mono:ui-monospace,"SF Mono",Menlo,"PingFang SC",monospace; }
+  * { box-sizing:border-box; margin:0; }
+  body { background:var(--bg); color:var(--fg); font-family:var(--mono); line-height:1.6; }
+  .wrap { max-width:1000px; margin:0 auto; padding:0 20px; }
+  header { padding:16px 0; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px; }
+  header .logo { color:var(--cyan); font-weight:bold; }
+  header .logo::before { content:"▛ "; }
+  header nav { margin-left:auto; display:flex; gap:18px; font-size:13px; }
+  header nav a { color:var(--dim); text-decoration:none; }
+  header nav a:hover { color:var(--fg); }
+  .hero { padding:70px 0 50px; text-align:center; }
+  .hero h1 { font-size:34px; line-height:1.35; }
+  .hero h1 b { color:var(--cyan); }
+  .hero p { color:var(--dim); font-size:16px; margin:16px auto 0; max-width:620px; }
+  .cta { display:inline-flex; gap:12px; margin-top:30px; flex-wrap:wrap; justify-content:center; }
+  .btn { padding:12px 26px; border-radius:8px; font-size:15px; text-decoration:none; }
+  .btn.primary { background:#0d2b33; color:var(--cyan); border:1px solid #164e5e; }
+  .btn.primary:hover { background:#10404d; }
+  .btn.ghost { color:var(--dim); border:1px solid var(--line); }
+  .flow { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:40px 0; }
+  .step { border:1px solid var(--line); border-radius:10px; padding:16px; background:var(--panel); }
+  .step .n { color:var(--cyan); font-size:12px; }
+  .step h3 { font-size:15px; margin:6px 0 4px; }
+  .step p { color:var(--dim); font-size:12.5px; }
+  section { padding:44px 0; border-top:1px solid var(--line); }
+  section h2 { font-size:22px; margin-bottom:8px; }
+  section .sub { color:var(--dim); font-size:14px; margin-bottom:24px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--panel); }
+  .card h3 { font-size:15px; color:var(--fg); }
+  .card h3 .em { color:var(--green); }
+  .card p { color:var(--dim); font-size:13px; margin-top:6px; }
+  .why { display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .why > div { padding:20px 22px; }
+  .why .old { background:#140f0f; }
+  .why .new { background:#0d1512; border-left:1px solid var(--line); }
+  .why h4 { font-size:14px; margin-bottom:10px; }
+  .why .old h4 { color:var(--amber); }
+  .why .new h4 { color:var(--green); }
+  .why ul { list-style:none; font-size:13px; color:var(--dim); }
+  .why li { margin:7px 0; padding-left:18px; position:relative; }
+  .why .old li::before { content:"✗"; position:absolute; left:0; color:#f87171; }
+  .why .new li::before { content:"✓"; position:absolute; left:0; color:var(--green); }
+  footer { padding:34px 0; border-top:1px solid var(--line); color:var(--dim); font-size:12px; text-align:center; }
+  @media(max-width:640px){ .why{grid-template-columns:1fr} .hero h1{font-size:26px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="logo">agent-builder</span>
+    <nav>
+      <a href="#how">怎么用</a>
+      <a href="#trust">凭什么稳</a>
+      <a href="/app">进入工作台</a>
+      <a href="https://dsh.happysyy.com" target="_blank">DeepSeek Harness</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <h1>用一段话,搭一个<b>能稳定交付结果</b>的 AI agent</h1>
+    <p>不用懂技术,不用写提示词。说清你要什么,系统自动设计、拼装、评审,把「输入 → 产物」摆到你面前——你点头,它就成了一份能反复交付的资产。</p>
+    <div class="cta">
+      <a class="btn primary" href="/app">▶ 进入工作台,开始搭建</a>
+      <a class="btn ghost" href="#how">看看怎么运作</a>
+    </div>
+  </div>
+
+  <div class="flow">
+    <div class="step"><div class="n">01</div><h3>说需求</h3><p>大白话描述要它整理/生成什么</p></div>
+    <div class="step"><div class="n">02</div><h3>确认方案</h3><p>看 AI 设计的「拼接说明书」,点头或提意见</p></div>
+    <div class="step"><div class="n">03</div><h3>自动拼装+评审</h3><p>DeepSeek Harness 执行,四层门禁把关,产物回来评审</p></div>
+    <div class="step"><div class="n">04</div><h3>评估产物</h3><p>看真实产物,满意就定稿</p></div>
+    <div class="step"><div class="n">05</div><h3>一键使用</h3><p>资产进库,一键挂进 Harness 持续交付</p></div>
+  </div>
+
+  <section id="how">
+    <h2>一站式:设计与执行,各司其职</h2>
+    <p class="sub">agent-builder 负责"设计和评审",DeepSeek Harness 负责"执行拼装"——两者打通,你只管判断。</p>
+    <div class="cards">
+      <div class="card"><h3>① 设计</h3><p>把你的需求编译成机器可执行的「说明书」:输出字段、硬规则、软判断标准。</p></div>
+      <div class="card"><h3>② 执行(DeepSeek Harness)</h3><p>说明书挂进真 Harness 拼装,模型干活,门禁在进程内实时把关不合格就打回。</p></div>
+      <div class="card"><h3>③ 评审</h3><p>拼出来的产物回到 builder,过确定性门禁 + 独立 AI 评审,给出诚实的稳定性报告。</p></div>
+      <div class="card"><h3>④ 资产化</h3><p>定稿的说明书进你的资产库,带信心分级,一键启动即可持续交付。</p></div>
+    </div>
+  </section>
+
+  <section id="trust">
+    <h2>凭什么敢说"稳定"</h2>
+    <p class="sub">AI 会编数字、时对时错——我们不靠祈祷,靠一道能证伪的门禁。</p>
+    <div class="why">
+      <div class="old">
+        <h4>普通 AI 工具</h4>
+        <ul>
+          <li>同样输入,今天对明天错</li>
+          <li>会编造数字、编号,你未必看得出</li>
+          <li>改一句提示词,整个行为漂移</li>
+          <li>没有"定稿",没法反复交付</li>
+        </ul>
+      </div>
+      <div class="new">
+        <h4>agent-builder</h4>
+        <ul>
+          <li>四层门禁:结构 / 规则 / 对照防编造 / 独立评审</li>
+          <li>产出不合格自动打回重做,重试用尽如实告知</li>
+          <li>配置指纹 + 一键自检,随时自证门禁在岗</li>
+          <li>定稿即资产,越用越稳(线上翻车样本自动回流再版)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="cta" style="justify-content:flex-start">
+      <a class="btn primary" href="/app">▶ 现在就搭一个</a>
+    </div>
+  </section>
+</div>
+<footer>
+  agent-builder · 与 DeepSeek Harness 结合的一站式 agent 交付服务 · happysyy.com
+</footer>
+</body>
+</html>
