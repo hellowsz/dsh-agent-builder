@@ -12,6 +12,8 @@ export interface PresetOptions {
   readonly gateFilePath: string
   /** 工作提示词文件的绝对路径(注入为部署 persona,一条命令即可用) */
   readonly promptFilePath?: string
+  /** 运行期回流文件(jsonl)绝对路径:定稿资产默认开 */
+  readonly feedbackFilePath?: string
   /** steer 重试上限，默认 2 */
   readonly maxRetries?: number
 }
@@ -27,6 +29,7 @@ export function derivePresetYaml(spec: TaskSpec, options: PresetOptions): string
           config: {
             gateFile: options.gateFilePath,
             ...(options.promptFilePath !== undefined ? { promptFile: options.promptFilePath } : {}),
+            ...(options.feedbackFilePath !== undefined ? { feedbackFile: options.feedbackFilePath } : {}),
             maxRetries: options.maxRetries ?? 2,
           },
         },

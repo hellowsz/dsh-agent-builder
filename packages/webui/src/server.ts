@@ -10,12 +10,18 @@ import { type ChatClient, type ChatMessage } from '@dsh-agent-builder/evaluator'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import {
+  collectWebMaterials,
   createDshProducer,
   deriveGate,
   draftSpec,
   freeze,
   generateSamples,
+  mergeSampleBank,
+  readRuntimeBlocks,
+  readRuntimeEvidence,
   runStability,
+  tierOf,
+  TIER_LABEL,
   validateSpec,
   writeCandidate,
   type PipelineEvent,
@@ -48,6 +54,8 @@ export interface WebuiOptions {
   readonly produceFactory?: (presetFile: string) => (sample: Sample) => Promise<string>
   /** 一键启动器(可注入,测试用):给定 preset 返回可访问的 URL。缺省真启 dsh web。 */
   readonly launcher?: (presetFile: string) => Promise<string>
+  /** 网络素材采集器(可注入,测试用):缺省 collectWebMaterials(真上网,默认开)。 */
+  readonly materialsCollector?: (spec: TaskSpec) => Promise<Sample[]>
 }
 
 interface Envelope {
@@ -150,6 +158,7 @@ export function createWebuiServer(options: WebuiOptions): Server {
   const sessionsDir = options.sessionsDir ?? resolve(here, '../../../sessions')
   const store = new TaskStore(sessionsDir)
   const produceFactory = options.produceFactory ?? ((presetFile: string) => createDshProducer({ presetFile }))
+  const materialsCollector = options.materialsCollector ?? ((spec: TaskSpec) => collectWebMaterials(workClient, spec, 1))
   let dshChild: ReturnType<typeof spawn> | undefined
   const launcher = options.launcher ?? (async (presetFile: string) => {
     dshChild?.kill()
@@ -193,11 +202,22 @@ export function createWebuiServer(options: WebuiOptions): Server {
             const presetFile = join(outDir, name, `${name}.preset.yaml`)
             if (!existsSync(specFile) || !existsSync(presetFile)) return []
             const spec = JSON.parse(readFileSync(specFile, 'utf8')) as TaskSpec
+            const metaFile = join(outDir, name, 'meta.json')
+            const meta = existsSync(metaFile)
+              ? (JSON.parse(readFileSync(metaFile, 'utf8')) as { tier?: string })
+              : {}
+            const evidence = readRuntimeEvidence(join(outDir, name, 'runtime-feedback.jsonl'))
+            // 线上零拦截连击达标 → silver 升 gold
+            const tier = meta.tier === 'silver' && evidence.cleanStreak >= 10 ? 'gold' : (meta.tier ?? 'bronze')
             return [{
               name,
               title: spec.title,
               frozenAt: statSync(specFile).mtime.toISOString(),
               presetFile,
+              tier,
+              tierLabel: TIER_LABEL[tier as keyof typeof TIER_LABEL] ?? tier,
+              runtimeBlocked: evidence.blockedTotal,
+              runtimeCleanStreak: evidence.cleanStreak,
               dshCommand: `npx -y @deepseek-ai/dsh --patch ${presetFile} --profile web --port 3080`,
             }]
           })
@@ -251,13 +271,31 @@ export function createWebuiServer(options: WebuiOptions): Server {
           const task = store.get(typeof body.taskId === 'string' ? body.taskId : '')
           if (task.spec === undefined) throw new Error('先起草并确认说明书')
           const spec = parseSpec(task.spec)
-          const extra = parseSamples(body.samples, false)
-          bus.log('info', 'explore', `[${task.title}] 样例自探索:AI 编造真实感样例(正例+无关反例)`)
-          const generated = await generateSamples(workClient, spec, 2)
-          const samples = [...generated, ...extra]
+          const extra = parseSamples(body.samples, false).map((x) => ({ ...x, origin: 'real' as const }))
+          const bankBefore = task.samples ?? []
+          const incoming: Sample[] = [...extra]
+          if (bankBefore.length === 0) {
+            bus.log('info', 'explore', `[${task.title}] 样例自探索:AI 编造真实感样例(正例+无关反例)`)
+            incoming.push(...await generateSamples(workClient, spec, 2))
+          }
+          // 网络素材(默认开):还没有 web 级证据时上网采集,失败降级并如实记录
+          if (![...bankBefore, ...incoming].some((x) => x.origin === 'web')) {
+            bus.log('info', 'explore', `[${task.title}] 上网采集真实素材…`)
+            const webSamples = await materialsCollector(spec)
+            if (webSamples.length > 0) bus.log('ok', 'explore', `[${task.title}] 网络素材 ${webSamples.length} 条入集`)
+            else bus.log('warn', 'explore', `[${task.title}] 网络素材采集失败,本轮以合成样例为主(信心上限 🥉)`)
+            incoming.push(...webSamples)
+          }
+          // 定稿资产的线上翻车样本自动回流(默认开)
+          if (task.frozen !== undefined) {
+            const blocks = readRuntimeBlocks(join(task.frozen.dir, 'runtime-feedback.jsonl'))
+            if (blocks.length > 0) bus.log('info', 'explore', `[${task.title}] 回流 ${blocks.length} 条线上翻车样本进回归集`)
+            incoming.push(...blocks)
+          }
+          const samples = mergeSampleBank(bankBefore, incoming)
           bus.log('ok', 'explore',
-            `[${task.title}] 样例就绪:${generated.length} 条自造${extra.length > 0 ? ` + ${extra.length} 条用户真实样例` : ''}`,
-            { samples: samples.map((x) => ({ name: x.name, expect: x.expect, source: x.source })) })
+            `[${task.title}] 回归样例集:${samples.length} 条(历史 ${bankBefore.length} + 新增 ${samples.length - bankBefore.length}),全量重跑`,
+            { samples: samples.map((x) => ({ name: x.name, expect: x.expect, origin: x.origin ?? 'synthetic', source: x.source })) })
           const gate = deriveGate(spec)
           const candidate = writeCandidate(spec, join(sessionsDir, task.id, 'candidate'), { pluginPath })
           bus.log('info', 'exec', `[${task.title}] 设计完成→候选配置已写盘,交给 DeepSeek Harness 执行(${samples.length} 个样例,门禁 ${gate.checks.length} 项)`, { candidate })
@@ -268,9 +306,10 @@ export function createWebuiServer(options: WebuiOptions): Server {
             onEvent: pipelineLog(bus),
             produce: produceFactory(candidate.presetFile),
           })
+          const tier = tierOf(samples, report)
           bus.log(report.matchRate === 1 ? 'ok' : 'warn', 'verify',
-            `[${task.title}] DSH 拼装完成,agent builder 评审毕:${report.matched}/${report.total} 符合预期,等你评估定稿`)
-          const updated = store.update(task.id, { samples, report, status: 'review' })
+            `[${task.title}] DSH 拼装完成,agent builder 评审毕:${report.matched}/${report.total} 符合预期,信心等级:${TIER_LABEL[tier]}`)
+          const updated = store.update(task.id, { samples, report, tier, status: 'review' })
           send(res, 200, { ok: true, data: { task: updated } })
           return
         }
@@ -291,7 +330,7 @@ export function createWebuiServer(options: WebuiOptions): Server {
           const result = freeze(spec, task.report, outDir, {
             pluginPath,
             gateFilePath: join(outDir, spec.name, `${spec.name}.gate.yaml`),
-          })
+          }, task.samples)
           const dshCommand = `npx -y @deepseek-ai/dsh --patch ${result.dir}/${spec.name}.preset.yaml --profile web --port 3080`
           const frozen = { dir: result.dir, files: result.files, dshCommand }
           const updated = store.update(task.id, { frozen, status: 'frozen' })

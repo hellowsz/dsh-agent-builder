@@ -40,9 +40,10 @@ function parseSamples(raw: Record<string, unknown>, goodCount: number): Sample[]
     name: `探索样例${i + 1}`,
     source: source.trim(),
     expect: 'pass' as const,
+    origin: 'synthetic' as const,
   }))
   const firstBad = bad[0]
-  if (firstBad !== undefined) samples.push({ name: '无关反例', source: firstBad.trim(), expect: 'block' })
+  if (firstBad !== undefined) samples.push({ name: '无关反例', source: firstBad.trim(), expect: 'block', origin: 'synthetic' })
   return samples
 }
 

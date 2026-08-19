@@ -47,7 +47,8 @@ const produceFactory = (presetFile: string) => async (sample: { source: string }
 }
 const launched: string[] = []
 const launcher = async (presetFile: string) => { launched.push(presetFile); return 'http://127.0.0.1:3080' }
-const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs', sessionsDir, produceFactory, launcher })
+const materialsCollector = async () => [{ name: '网络素材1', source: '网络示例 金额 428 元', expect: 'pass' as const, origin: 'web' as const }]
+const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs', sessionsDir, produceFactory, launcher, materialsCollector })
 let base = ''
 
 beforeAll(async () => {
@@ -97,20 +98,25 @@ describe('webui 服务(任务制)', () => {
     expect(task.title).toBe('演示整理助手')
   })
 
-  it('explore:自造样例跑全链路,产物随任务返回', async () => {
+  it('explore:自造样例+网络素材(默认开),信心分级 silver', async () => {
     const r = await post('/api/explore', { taskId })
     expect(r.status).toBe(200)
-    const task = (r.body.data as { task: { status: string; samples: Array<{ expect: string }>; report: { matchRate: number; results: Array<{ record?: unknown }> } } }).task
+    const task = (r.body.data as { task: { status: string; tier: string; samples: Array<{ origin?: string }>; report: { matchRate: number; results: Array<{ record?: unknown }> } } }).task
     expect(task.status).toBe('review')
-    expect(task.samples.map((x) => x.expect)).toEqual(['pass', 'pass', 'block'])
+    expect(task.samples.some((x) => x.origin === 'web')).toBe(true)
     expect(task.report.matchRate).toBe(1)
+    expect(task.tier).toBe('silver') // 含 web 证据且全过
     expect(task.report.results[0]!.record).toMatchObject({ amount: 428 })
   })
 
-  it('explore:可附加用户真实样例', async () => {
-    const r = await post('/api/explore', { taskId, samples: [{ source: '午餐 金额 428 元' }] })
-    const task = (r.body.data as { task: { samples: Array<{ name: string }> } }).task
-    expect(task.samples.some((x) => x.name === '真实样例1')).toBe(true)
+  it('explore:回归样例集累积——补充真实样例后历史不丢、全量重跑', async () => {
+    const before = await fetch(base + '/api/task?id=' + taskId).then((x) => x.json()) as { data: { task: { samples: unknown[] } } }
+    const n0 = before.data.task.samples.length
+    const r = await post('/api/explore', { taskId, samples: [{ source: '晚餐 金额 56 元' }] })
+    const task = (r.body.data as { task: { samples: Array<{ name: string; origin?: string }>; report: { total: number } } }).task
+    expect(task.samples.length).toBe(n0 + 1)
+    expect(task.samples.some((x) => x.origin === 'real')).toBe(true)
+    expect(task.report.total).toBe(task.samples.length) // 全量重跑,历史不丢
   })
 
   it('freeze:说明书定稿,任务变 frozen', async () => {
@@ -118,7 +124,8 @@ describe('webui 服务(任务制)', () => {
     expect(r.status).toBe(200)
     const task = (r.body.data as { task: { status: string; frozen: { files: string[] } } }).task
     expect(task.status).toBe('frozen')
-    expect(task.frozen.files).toHaveLength(5)
+    expect(task.frozen.files).toHaveLength(6)
+    expect(task.frozen.files).toContain('meta.json')
     expect(existsSync(join(outDir, 'demo-sorter', 'demo-sorter.gate.yaml'))).toBe(true)
   })
 
@@ -154,10 +161,12 @@ describe('webui 服务(任务制)', () => {
   it('资产库:定稿后 /api/assets 可见,带一键命令', async () => {
     const res = await fetch(base + '/api/assets')
     const { data } = (await res.json()) as { data: { assets: Array<{ name: string; title: string; dshCommand: string }> } }
-    const asset = data.assets.find((a) => a.name === 'demo-sorter')
+    const asset = data.assets.find((a) => a.name === 'demo-sorter') as { title: string; dshCommand: string; tier: string; runtimeBlocked: number } | undefined
     expect(asset).toBeDefined()
     expect(asset!.title).toBe('演示整理助手')
     expect(asset!.dshCommand).toContain('--profile web')
+    expect(asset!.tier).toBe('silver')
+    expect(asset!.runtimeBlocked).toBe(0)
   })
 
   it('一键启动:/api/assets/launch 调起 DSH 并返回 URL', async () => {

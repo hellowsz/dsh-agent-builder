@@ -17,6 +17,9 @@ import { generateSamples } from './explore.js'
 import { writeCandidate } from './candidate.js'
 import { createDshProducer } from './dsh-runner.js'
 import { runStability, renderReport, type PipelineEvent, type Sample, type StabilityReport } from './stability.js'
+import { collectWebMaterials } from './web-material.js'
+import { mergeSampleBank, tierOf, TIER_LABEL } from './confidence.js'
+import { readRuntimeBlocks, readRuntimeEvidence } from './runtime-feedback.js'
 import { freeze } from './freeze.js'
 import { TaskStore, type BuilderTask } from './tasks.js'
 import { type TaskSpec } from './spec.js'
@@ -87,11 +90,14 @@ function showSpec(spec: TaskSpec): void {
   if (spec.aiReview.length === 0) stdout.write('  (无)\n')
 }
 
+const ORIGIN_LABEL: Record<string, string> = { synthetic: '合成', web: '网络素材', real: '真实样例', runtime: '线上回流' }
+
 function showProducts(samples: readonly Sample[] | undefined, report: StabilityReport): void {
   const bySource = new Map((samples ?? []).map((s) => [s.name, s.source]))
+  const byOrigin = new Map((samples ?? []).map((s) => [s.name, s.origin ?? 'synthetic']))
   stdout.write(`\n${renderReport({ title: '' } as TaskSpec, report).split('\n').slice(2).join('\n')}\n`)
   for (const r of report.results) {
-    stdout.write(`\n── ${r.name} ${r.ok ? '✓ 符合预期' : '✗ 不符合预期'} ──\n`)
+    stdout.write(`\n── ${r.name}[${ORIGIN_LABEL[byOrigin.get(r.name) ?? 'synthetic']}] ${r.ok ? '✓ 符合预期' : '✗ 不符合预期'} ──\n`)
     stdout.write(`原文: ${(bySource.get(r.name) ?? '').slice(0, 120)}\n`)
     if (r.record !== undefined) {
       stdout.write('产物:\n')
@@ -105,18 +111,35 @@ function showProducts(samples: readonly Sample[] | undefined, report: StabilityR
 async function exploreTask(task: BuilderTask, extra: readonly Sample[]): Promise<BuilderTask> {
   const spec = task.spec
   if (spec === undefined) throw new Error('先起草说明书')
-  log('explore', 'AI 自造样例(正例+无关反例)…')
-  const generated = await generateSamples(workClient, spec, 2)
-  const samples = [...generated, ...extra]
+  const bankBefore = task.samples ?? []
+  const incoming: Sample[] = extra.map((x) => ({ ...x, origin: 'real' as const }))
+  if (bankBefore.length === 0) {
+    log('explore', 'AI 自造样例(正例+无关反例)…')
+    incoming.push(...await generateSamples(workClient, spec, 2))
+  }
+  if (![...bankBefore, ...incoming].some((x) => x.origin === 'web')) {
+    log('explore', '上网采集真实素材…')
+    const webSamples = await collectWebMaterials(workClient, spec, 1)
+    log('explore', webSamples.length > 0 ? `网络素材 ${webSamples.length} 条入集` : '网络素材采集失败,本轮以合成为主(信心上限 🥉)')
+    incoming.push(...webSamples)
+  }
+  if (task.frozen !== undefined) {
+    const blocks = readRuntimeBlocks(join(task.frozen.dir, 'runtime-feedback.jsonl'))
+    if (blocks.length > 0) log('explore', `回流 ${blocks.length} 条线上翻车样本进回归集`)
+    incoming.push(...blocks)
+  }
+  const samples = mergeSampleBank(bankBefore, incoming)
   const candidate = writeCandidate(spec, join(SESSIONS, task.id, 'candidate'), { pluginPath: PLUGIN })
-  log('exec', `候选配置已写盘 → 交 DeepSeek Harness 执行(${samples.length} 个样例)`)
+  log('exec', `回归样例集 ${samples.length} 条(历史 ${bankBefore.length})→ 候选配置交 DeepSeek Harness 全量执行`)
   const gate = deriveGate(spec)
   const report = await runStability(spec, gate, samples, {
     workClient, reviewClient, today: localToday(),
     produce: createDshProducer({ presetFile: candidate.presetFile }),
     onEvent: pipelinePrinter(),
   })
-  return store.update(task.id, { samples, report, status: 'review' })
+  const tier = tierOf(samples, report)
+  log('verify', `信心等级:${TIER_LABEL[tier]}`)
+  return store.update(task.id, { samples, report, tier, status: 'review' })
 }
 
 async function runTask(id: string): Promise<void> {
@@ -149,7 +172,7 @@ async function runTask(id: string): Promise<void> {
         const result = freeze(spec, task.report!, ASSETS, {
           pluginPath: PLUGIN,
           gateFilePath: join(ASSETS, spec.name, `${spec.name}.gate.yaml`),
-        })
+        }, task.samples)
         task = store.update(task.id, { status: 'frozen', frozen: {
           dir: result.dir, files: result.files,
           dshCommand: `npx -y @deepseek-ai/dsh --patch ${result.dir}/${spec.name}.preset.yaml --profile web --port 3080`,
@@ -189,7 +212,11 @@ async function assetsMenu(): Promise<void> {
   const assets = listAssets()
   if (assets.length === 0) { stdout.write('资产库为空——定稿一个任务后再来。\n'); return }
   stdout.write('\n── 用户资产(已定稿的 harness 配置)──\n')
-  assets.forEach((a, i) => stdout.write(`  [${i + 1}] ${a.title}(${a.name})\n`))
+  assets.forEach((a, i) => {
+    const ev = readRuntimeEvidence(join(ASSETS, a.name, 'runtime-feedback.jsonl'))
+    const fb = ev.blockedTotal > 0 ? ` | 线上翻车 ${ev.blockedTotal}(打开任务重新探索即回流再版)` : ''
+    stdout.write(`  [${i + 1}] ${a.title}(${a.name})${fb}\n`)
+  })
   const a = (await rl.ask('输入序号一键启动使用,回车返回> ')).trim()
   const idx = Number.parseInt(a, 10) - 1
   const chosen = assets[idx]

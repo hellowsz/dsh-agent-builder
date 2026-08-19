@@ -6,6 +6,7 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { type Sample, type StabilityReport } from './stability.js'
+import { type ConfidenceTier } from './confidence.js'
 import { type TaskSpec } from './spec.js'
 
 export type TaskStatus = 'draft' | 'review' | 'frozen'
@@ -22,6 +23,8 @@ export interface BuilderTask {
   readonly spec?: TaskSpec
   readonly samples?: readonly Sample[]
   readonly report?: StabilityReport
+  /** 最新一次验证后的信心等级 */
+  readonly tier?: ConfidenceTier
   readonly frozen?: { readonly dir: string; readonly files: readonly string[]; readonly dshCommand: string }
 }
 

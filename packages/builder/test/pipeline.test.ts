@@ -133,6 +133,7 @@ describe('稳定性验证 + 固化（假 LLM）', () => {
       'reimbursement.preset.yaml',
       'spec.json',
       'report.md',
+      'meta.json',
     ])
     const md = readFileSync(join(result.dir, 'report.md'), 'utf8')
     expect(md).toContain('稳定性报告')

@@ -11,11 +11,16 @@ import { review, type ChatClient, type ReviewResult } from '@dsh-agent-builder/e
 import { deriveWorkPrompt } from './prompt.js'
 import { type TaskSpec } from './spec.js'
 
+/** 样例来源:synthetic=AI 编造 / web=网络素材 / real=用户真实 / runtime=线上翻车回流。 */
+export type SampleOrigin = 'synthetic' | 'web' | 'real' | 'runtime'
+
 /** 一个测试样例：原文 + 期望（good=应通过 / bad=应被拦下）。 */
 export interface Sample {
   readonly name: string
   readonly source: string
   readonly expect: 'pass' | 'block'
+  /** 来源(信心分级依据),缺省视为 synthetic */
+  readonly origin?: SampleOrigin
 }
 
 /** 单个样例的运行结果。 */

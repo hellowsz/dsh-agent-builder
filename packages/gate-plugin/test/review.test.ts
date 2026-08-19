@@ -116,6 +116,24 @@ describe('运行时 ④ 评审', () => {
     expect(h.logs.some((l) => l.includes('提示词未注入'))).toBe(true)
   })
 
+  it('运行期回流:最终放行记 pass,重试用尽拦截记 block(带原文与问题码)', async () => {
+    const { mkdtempSync, readFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const feedbackFile = join(mkdtempSync(join(tmpdir(), 'fb-')), 'runtime-feedback.jsonl')
+    const h = makeHarness()
+    applyCore(h.ctx as never, { gateFile: writeGateFile(GATE_WITH_REVIEW), maxRetries: 0, feedbackFile })
+    h.emitUser(SOURCE)
+    h.emitAssistant(GOOD_JSON)
+    await h.stopTurn(1) // 无评审器→确定性过→pass
+    h.emitAssistant(BAD_STRUCT_JSON)
+    await h.stopTurn(2) // maxRetries=0→立即拦截落盘
+    const lines = readFileSync(feedbackFile, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines[0]).toMatchObject({ kind: 'pass' })
+    expect(lines[1]).toMatchObject({ kind: 'block', source: SOURCE })
+    expect(lines[1].issues).toContain('amount_invalid')
+  })
+
   it('未注入评审器(如 reviewMode=off) → 只跑确定性,不拦', async () => {
     const h = makeHarness()
     applyCore(h.ctx as never, { gateFile: writeGateFile(GATE_WITH_REVIEW), maxRetries: 2 })

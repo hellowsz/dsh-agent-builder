@@ -17,7 +17,7 @@ export interface CandidatePaths {
 }
 
 /** 把一份规格落成候选配置目录。 */
-export function writeCandidate(spec: TaskSpec, dir: string, options: Omit<PresetOptions, 'gateFilePath' | 'promptFilePath'>): CandidatePaths {
+export function writeCandidate(spec: TaskSpec, dir: string, options: Omit<PresetOptions, 'gateFilePath' | 'promptFilePath'> & { readonly feedbackFilePath?: string }): CandidatePaths {
   mkdirSync(dir, { recursive: true })
   const gateFile = join(dir, `${spec.name}.gate.yaml`)
   const promptFile = join(dir, `${spec.name}.prompt.md`)

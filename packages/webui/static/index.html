@@ -373,14 +373,17 @@ function renderReport(r) {
     '</td><td class="' + (x.ok ? 'ok-t' : 'bad-t') + '">' + (x.ok ? 'PASS ✓' : 'FAIL ✗') +
     '</td><td>' + (x.issues.length ? esc(x.issues.join('、')) : '—') + '</td></tr>').join('');
   const pct = Math.round(r.matchRate * 100);
+  const TIER_TXT = { none: '未达标', bronze: '🥉 合成样例验证', silver: '🥈 真实素材验证', gold: '🥇 线上实证' };
+  const tierBadge = task && task.tier ? ' <span class="tag">信心:' + (TIER_TXT[task.tier] || task.tier) + '</span>' : '';
   $('reportView').innerHTML =
-    '<p>' + r.total + ' 个样例 / ' + r.matched + ' 个符合预期 → <b class="' + (pct === 100 ? 'ok-t' : 'warn-t') + '">' + pct + '%</b></p>' +
+    '<p>' + r.total + ' 个样例 / ' + r.matched + ' 个符合预期 → <b class="' + (pct === 100 ? 'ok-t' : 'warn-t') + '">' + pct + '%</b>' + tierBadge + '</p>' +
     '<table><tr><th>SAMPLE</th><th>预期</th><th>RESULT</th><th>ISSUES</th></tr>' + rows + '</table>';
 }
 
+const ORIGIN_LABEL = { synthetic: '合成', web: '网络素材', real: '真实样例', runtime: '线上回流' };
 function renderProducts(samples, r) {
-  const bySource = {};
-  (samples || []).forEach((s) => { bySource[s.name] = s.source; });
+  const bySource = {}, byOrigin = {};
+  (samples || []).forEach((s) => { bySource[s.name] = s.source; byOrigin[s.name] = s.origin || 'synthetic'; });
   const labelOf = {};
   ((task.spec && task.spec.fields) || []).forEach((f) => { labelOf[f.name] = f.label; });
   const cards = r.results.map((x) => {
@@ -395,7 +398,8 @@ function renderProducts(samples, r) {
     }
     const badge = x.ok ? '<span class="tag" style="color:var(--green);border-color:#1d3a2a">符合预期</span>'
                        : '<span class="tag" style="color:var(--red);border-color:#4a1d1d">不符合预期</span>';
-    return '<div class="panel" style="margin-top:10px"><div class="cap">' + esc(x.name) + ' ' + badge +
+    const originTag = '<span class="tag">' + (ORIGIN_LABEL[byOrigin[x.name]] || byOrigin[x.name]) + '</span>';
+    return '<div class="panel" style="margin-top:10px"><div class="cap">' + esc(x.name) + ' ' + originTag + ' ' + badge +
            '</div><div class="body">' + inner + '</div></div>';
   }).join('');
   $('productView').innerHTML = cards;
@@ -410,7 +414,8 @@ async function loadAssets() {
   const list = $('assetList');
   list.innerHTML = (d.data.assets || []).map((a) =>
     '<div class="task"><div class="tt">' + esc(a.title) + '</div>' +
-    '<div class="ts2"><span>' + esc(a.name) + '</span>' +
+    '<div class="ts2"><span>' + esc(a.tierLabel || '') + '</span>' +
+    (a.runtimeBlocked > 0 ? '<span class="st draft">翻车' + a.runtimeBlocked + '·任务页再探索可回流</span>' : '') +
     '<button class="f" data-launch="' + esc(a.name) + '">▶ 一键使用</button></div></div>').join('') ||
     '<p class="hint">定稿后出现在这里</p>';
   list.querySelectorAll('[data-launch]').forEach((b) => {

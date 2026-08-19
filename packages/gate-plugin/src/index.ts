@@ -8,7 +8,7 @@
  * 每 agent 专属：把本插件放进该 agent 的 preset（ctx.agentPresets 作用域隔离），
  * 每份 preset 配自己的门禁文件。
  */
-import { readFileSync } from 'node:fs'
+import { appendFileSync, readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { extractJsonRecord, parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
 import { buildFeedback, buildReviewFeedback, NO_RECORD_FEEDBACK } from './feedback.js'
@@ -26,6 +26,8 @@ export interface GatePluginConfig extends ReviewChannelConfig {
   readonly maxRetries?: number
   /** 工作提示词文件(md)的绝对路径:配置后注入为部署 persona,固化的 agent 一条命令即可用 */
   readonly promptFile?: string
+  /** 运行期回流文件(jsonl):最终放行/拦截都记录,拦截带原文供说明书再版。配置即开(定稿资产默认开) */
+  readonly feedbackFile?: string
 }
 
 // ---- 面向 DSH 的最小结构类型（鸭子类型，便于单测注入替身） ----
@@ -97,7 +99,8 @@ export function loadConfig(config: unknown): { gate: GateDefinition; maxRetries:
   const promptText = typeof c.promptFile === 'string' && c.promptFile.trim() !== ''
     ? readFileSync(c.promptFile, 'utf8')
     : undefined
-  return { gate, maxRetries, gateFile: c.gateFile, promptText }
+  const feedbackFile = typeof c.feedbackFile === 'string' && c.feedbackFile.trim() !== '' ? c.feedbackFile : undefined
+  return { gate, maxRetries, gateFile: c.gateFile, promptText, feedbackFile }
 }
 
 /** cordis 入口：按配置建评审通道（门禁没有 aiReview 条目则不建）。 */
@@ -110,7 +113,17 @@ export function apply(ctx: ContextLike, config: unknown): void {
 
 /** 核心装配（评审执行器可注入，便于单测）。 */
 export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer): void {
-  const { gate, maxRetries, gateFile, promptText } = loadConfig(config)
+  const { gate, maxRetries, gateFile, promptText, feedbackFile } = loadConfig(config)
+
+  /** 运行期回流:一行一条,写失败绝不影响主流程。 */
+  const feedback = (entry: Record<string, unknown>): void => {
+    if (feedbackFile === undefined) return
+    try {
+      appendFileSync(feedbackFile, `${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`)
+    } catch {
+      ctx.logger?.warn(`[gate] ${gate.name}: 回流写入失败(${feedbackFile})`)
+    }
+  }
 
   // 注入工作提示词为部署 persona(order 0),固化的 agent 免手动贴提示词
   if (promptText !== undefined) {
@@ -152,6 +165,7 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
     if (record === undefined) {
       if (used >= maxRetries) {
         log?.warn(`[gate] ${gate.name}: 未产出结构化结果且重试用尽（turn ${turn}）`)
+        feedback({ kind: 'block', source: state.source ?? '', issues: ['no_structured_output'] })
         return
       }
       state.retries.set(turn, used + 1)
@@ -163,6 +177,7 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
     if (!verdict.passed) {
       if (used >= maxRetries) {
         log?.warn(`[gate] ${gate.name}: 重试用尽仍未通过（turn ${turn}）：${verdict.issues.map((i) => i.code).join(', ')}`)
+        feedback({ kind: 'block', source: state.source ?? '', record, issues: verdict.issues.map((i) => i.code) })
         return
       }
       state.retries.set(turn, used + 1)
@@ -182,6 +197,7 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
           // 重试预算耗尽:诚实告警放行(运行时无限扣住回合会让 agent 卡死,比错误更伤)
           const why = result.error ?? result.findings.filter((f) => !f.passed).map((f) => f.id).join(', ')
           log?.warn(`[gate] ${gate.name}: ④评审未过且重试用尽,仅确定性检查把关放行（turn ${turn}）：${why}`)
+          feedback({ kind: 'block', source: state.source ?? '', record, issues: [`review:${why}`] })
           state.retries.delete(turn)
           return
         }
@@ -192,6 +208,7 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
     }
 
     state.retries.delete(turn)
+    feedback({ kind: 'pass' })
     const reviewNote = reviewer !== undefined && verdict.pendingAiReview.length > 0 ? '+④评审' : ''
     log?.info(`[gate] ${gate.name}: 通过（turn ${turn}，检查 ${gate.checks.length} 项${reviewNote}，门禁 ${gateFile}）`)
   })
