@@ -57,9 +57,19 @@ export function badgeHtml(info: BadgeInfo): string {
     +'<p>门禁:<b>①结构 '+I.layers.structural+' · ②规则 '+I.layers.rule+' · ③对照 '+I.layers.grounding+'</b></p>'
     +'<p>④独立评审:<b>'+(I.layers.aiReview>0?I.layers.aiReview+' 项':'未配置')+'</b> · 重试上限 <b>'+I.maxRetries+'</b></p>'
     +'<p>专属提示词:<b>'+(I.promptInjected?'已注入':'未配置')+'</b> · 运行回流:<b>'+(I.feedbackOn?'开':'关')+'</b></p>'
+    +'<p id="gate-live">本次会话:等待统计…</p>'
     +'<p style="margin-top:6px;color:#5c6b7d">产出不合格会被自动打回重做</p></div>'
-    +'<span class="chip">🛡 已装配:'+I.name+'</span>';
+    +'<span class="chip">🛡 已装配:'+I.name+' <b id="gate-count"></b></span>';
   d.querySelector('.chip').addEventListener('click',function(){d.classList.toggle('open')});
   document.body.appendChild(d);
+  function poll(){
+    fetch('/gate/status').then(function(r){return r.json()}).then(function(st){
+      var c=st.counters;
+      document.getElementById('gate-count').textContent='✓'+c.pass+' ✗'+c.block+(c.steer>0?' ↩'+c.steer:'');
+      document.getElementById('gate-live').innerHTML='本次会话:放行 <b>'+c.pass+'</b> · 拦截 <b>'+c.block+'</b> · 打回重做 <b>'+c.steer+'</b> 次'
+        +(c.degraded>0?' · <span style="color:#fbbf24">评审降级放行 '+c.degraded+'</span>':'');
+    }).catch(function(){})
+  }
+  poll(); setInterval(poll, 5000);
 })()</script>`
 }

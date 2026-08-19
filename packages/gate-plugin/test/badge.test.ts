@@ -35,9 +35,9 @@ describe('装配可观测徽章', () => {
     const taps: Array<(html: string) => string> = []
     const ctx = {
       ...h.ctx,
-      inject: (deps: readonly string[], cb: (s: { webServer: { tapIndex: (t: (html: string) => string) => void } }) => void) => {
+      inject: (deps: readonly string[], cb: (s: { webServer: { tapIndex: (t: (html: string) => string) => void; register: (r: unknown) => void } }) => void) => {
         expect(deps).toEqual(['webServer'])
-        cb({ webServer: { tapIndex: (t) => taps.push(t) } })
+        cb({ webServer: { tapIndex: (t) => taps.push(t), register: () => undefined } })
       },
     }
     applyCore(ctx as never, { gateFile: writeGateFile(TEST_GATE_YAML), maxRetries: 2 })
@@ -56,5 +56,46 @@ describe('装配可观测徽章', () => {
     h.emitAssistant('```json\n{"amount": 428.0, "invoiceNo": "INV1"}\n```')
     await h.stopTurn(1)
     expect(h.logs.some((l) => l.includes('通过'))).toBe(true)
+  })
+})
+
+describe('实时计数与状态端点', () => {
+  function setupWeb() {
+    const h = makeHarness()
+    let handler: ((req: unknown, res: { writeHead(c: number, h: Record<string, string>): void; end(b: string): void }) => void) | undefined
+    const routes: string[] = []
+    const ctx = {
+      ...h.ctx,
+      inject: (_d: readonly string[], cb: (s: { webServer: unknown }) => void) =>
+        cb({ webServer: {
+          tapIndex: () => undefined,
+          register: (r: { path: string; handler: typeof handler }) => { routes.push(r.path); handler = r.handler },
+        } }),
+    }
+    applyCore(ctx as never, { gateFile: writeGateFile(TEST_GATE_YAML), maxRetries: 1 })
+    const status = () => {
+      let body = ''
+      handler!(undefined, { writeHead: () => undefined, end: (b: string) => { body = b } })
+      return JSON.parse(body) as { name: string; counters: { pass: number; block: number; steer: number } }
+    }
+    return { ...h, routes, status }
+  }
+
+  it('注册 /gate/status;放行/打回/拦截计数实时可查', async () => {
+    const h = setupWeb()
+    expect(h.routes).toContain('/gate/status')
+    expect(h.status().counters).toEqual({ pass: 0, block: 0, steer: 0, degraded: 0 })
+    h.emitUser('发票 号码 INV20260812 金额 428.00 元')
+    h.emitAssistant('```json\n{"amount": 428.0, "invoiceNo": "INV20260812"}\n```')
+    await h.stopTurn(1) // 放行
+    expect(h.status().counters.pass).toBe(1)
+    h.emitAssistant('```json\n{"amount": 482.0, "invoiceNo": "INV20260812"}\n```')
+    await h.stopTurn(2) // 改数→打回(用掉唯一重试)
+    expect(h.status().counters.steer).toBe(1)
+    h.emitAssistant('```json\n{"amount": 482.0, "invoiceNo": "INV20260812"}\n```')
+    await h.stopTurn(2) // 重试用尽→拦截
+    const c = h.status().counters
+    expect(c.block).toBe(1)
+    expect(h.status().name).toBe('test-reimbursement')
   })
 })

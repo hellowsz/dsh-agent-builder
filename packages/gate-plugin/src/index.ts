@@ -47,6 +47,11 @@ interface SystemPromptLike {
 }
 interface WebServerLike {
   tapIndex(transform: (html: string) => string): unknown
+  register(route: {
+    kind: 'exact' | 'prefix'
+    path: string
+    handler: (req: unknown, res: { writeHead(code: number, headers: Record<string, string>): void; end(body: string): void }) => void
+  }): unknown
 }
 interface ContextLike {
   on(event: 'session/event', cb: (session: SessionLike, event: SessionEventLike) => void): unknown
@@ -139,11 +144,22 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
       ctx.logger?.warn(`[gate] ${gate.name}: 配置了 promptFile 但运行环境没有 systemPrompt 服务,提示词未注入`)
     }
   }
-  // 装配可观测:Web 页面注入徽章(headless 无 webServer,回调不触发,零影响)
+  // 本进程会话计数(徽章实时显示):放行/拦截/打回/评审降级放行
+  const counters = { pass: 0, block: 0, steer: 0, degraded: 0 }
+
+  // 装配可观测:Web 页面注入徽章 + /gate/status 状态端点(headless 无 webServer,回调不触发,零影响)
   const info = badgeInfo(gate, maxRetries, promptText !== undefined, feedbackFile !== undefined)
   ctx.inject?.(['webServer'], (scoped) => {
     scoped.webServer.tapIndex((html) => html.replace('</body>', `${badgeHtml(info)}</body>`))
-    ctx.logger?.info(`[gate] ${gate.name}: 装配徽章已注入 Web 页面`)
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/gate/status',
+      handler: (_req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ name: gate.name, counters }))
+      },
+    })
+    ctx.logger?.info(`[gate] ${gate.name}: 装配徽章与 /gate/status 已注入 Web 页面`)
   })
 
   const states = new WeakMap<SessionLike, SessionState>()
@@ -178,10 +194,12 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
     if (record === undefined) {
       if (used >= maxRetries) {
         log?.warn(`[gate] ${gate.name}: 未产出结构化结果且重试用尽（turn ${turn}）`)
+        counters.block++
         feedback({ kind: 'block', source: state.source ?? '', issues: ['no_structured_output'] })
         return
       }
       state.retries.set(turn, used + 1)
+      counters.steer++
       agent.steer(steerMessage(NO_RECORD_FEEDBACK))
       return
     }
@@ -190,10 +208,12 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
     if (!verdict.passed) {
       if (used >= maxRetries) {
         log?.warn(`[gate] ${gate.name}: 重试用尽仍未通过（turn ${turn}）：${verdict.issues.map((i) => i.code).join(', ')}`)
+        counters.block++
         feedback({ kind: 'block', source: state.source ?? '', record, issues: verdict.issues.map((i) => i.code) })
         return
       }
       state.retries.set(turn, used + 1)
+      counters.steer++
       agent.steer(steerMessage(buildFeedback(verdict, used + 1, maxRetries)))
       return
     }
@@ -210,17 +230,20 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
           // 重试预算耗尽:诚实告警放行(运行时无限扣住回合会让 agent 卡死,比错误更伤)
           const why = result.error ?? result.findings.filter((f) => !f.passed).map((f) => f.id).join(', ')
           log?.warn(`[gate] ${gate.name}: ④评审未过且重试用尽,仅确定性检查把关放行（turn ${turn}）：${why}`)
+          counters.degraded++
           feedback({ kind: 'block', source: state.source ?? '', record, issues: [`review:${why}`] })
           state.retries.delete(turn)
           return
         }
         state.retries.set(turn, used + 1)
+        counters.steer++
         agent.steer(steerMessage(buildReviewFeedback(result, verdict.pendingAiReview, used + 1, maxRetries)))
         return
       }
     }
 
     state.retries.delete(turn)
+    counters.pass++
     feedback({ kind: 'pass' })
     const reviewNote = reviewer !== undefined && verdict.pendingAiReview.length > 0 ? '+④评审' : ''
     log?.info(`[gate] ${gate.name}: 通过（turn ${turn}，检查 ${gate.checks.length} 项${reviewNote}，门禁 ${gateFile}）`)
