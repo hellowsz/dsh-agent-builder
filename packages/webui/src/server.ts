@@ -162,13 +162,36 @@ export function createWebuiServer(options: WebuiOptions): Server {
     createDshProducer({ presetFile, ...(runsDir !== undefined ? { runsDir } : {}) }))
   const materialsCollector = options.materialsCollector ?? ((spec: TaskSpec) => collectWebMaterials(workClient, spec, 1))
   let dshChild: ReturnType<typeof spawn> | undefined
+  let runningPreset: string | undefined
+  const DSH_URL = 'http://127.0.0.1:3080'
+  const dshAlive = async (): Promise<boolean> => {
+    try {
+      const controller = new AbortController()
+      const t = setTimeout(() => controller.abort(), 1500)
+      const r = await fetch(DSH_URL, { signal: controller.signal })
+      clearTimeout(t)
+      return r.ok
+    } catch {
+      return false
+    }
+  }
   const launcher = options.launcher ?? (async (presetFile: string) => {
+    // 同一资产已在跑 → 秒回,直接复用
+    if (runningPreset === presetFile && await dshAlive()) return DSH_URL
     dshChild?.kill()
+    runningPreset = undefined
     dshChild = spawn('npx', ['-y', '@deepseek-ai/dsh', '--patch', presetFile, '--profile', 'web', '--port', '3080'], {
       detached: false, stdio: 'ignore',
     })
-    await new Promise((r) => setTimeout(r, 15_000)) // 等 dsh 起服务
-    return 'http://127.0.0.1:3080'
+    // 轮询到 DSH 真就绪才返回,保证用户点开就是能用的页面
+    for (let i = 0; i < 45; i++) {
+      await new Promise((r) => setTimeout(r, 2000))
+      if (await dshAlive()) {
+        runningPreset = presetFile
+        return DSH_URL
+      }
+    }
+    throw new Error('DSH 启动超时(90 秒),请查看终端确认 dsh 是否可用')
   })
   bus.log('info', 'sys', `服务就绪(已加载 ${store.list().length} 个历史任务)`)
 

@@ -225,10 +225,22 @@ async function assetsMenu(): Promise<void> {
   const idx = Number.parseInt(a, 10) - 1
   const chosen = assets[idx]
   if (chosen === undefined) return
-  stdout.write(`启动 ${chosen.title} …(约 20 秒)\n`)
+  stdout.write(`启动 ${chosen.title} …(装配约 30-60 秒)\n`)
   spawn('npx', ['-y', '@deepseek-ai/dsh', '--patch', chosen.presetFile, '--profile', 'web', '--port', '3080'], { detached: true, stdio: 'ignore' }).unref()
-  await new Promise((r) => setTimeout(r, 15_000))
-  stdout.write('已就绪:http://127.0.0.1:3080(直接贴原文使用,四层门禁在岗)\n')
+  const url = 'http://127.0.0.1:3080'
+  let ready = false
+  for (let i = 0; i < 45 && !ready; i++) {
+    await new Promise((r) => setTimeout(r, 2000))
+    try {
+      const controller = new AbortController()
+      const t = setTimeout(() => controller.abort(), 1500)
+      ready = (await fetch(url, { signal: controller.signal })).ok
+      clearTimeout(t)
+    } catch { /* 未就绪,继续等 */ }
+  }
+  if (!ready) { stdout.write('DSH 启动超时,请手动检查。\n'); return }
+  spawn('open', [url], { detached: true, stdio: 'ignore' }).unref() // 直接打开已装配好的页面
+  stdout.write(`已就绪并为你打开:${url}(直接贴原文使用,四层门禁在岗)\n`)
 }
 
 async function main(): Promise<void> {

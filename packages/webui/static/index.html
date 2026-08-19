@@ -426,12 +426,13 @@ async function loadAssets() {
     '<p class="hint">定稿后出现在这里</p>';
   list.querySelectorAll('[data-launch]').forEach((b) => {
     b.onclick = async () => {
-      b.textContent = '启动中…'; b.disabled = true;
+      b.textContent = '装配启动中(约30-60秒)…'; b.disabled = true;
       try {
         const r = await api('/api/assets/launch', { name: b.dataset.launch });
         const box = $('assetUrl');
         box.style.display = '';
-        box.innerHTML = '已就绪 → <a href="' + esc(r.url) + '" target="_blank" style="color:var(--green)">' + esc(r.url) + '</a>(贴原文即用,四层门禁在岗)';
+        box.innerHTML = '已就绪,已为你打开 → <a href="' + esc(r.url) + '" target="_blank" style="color:var(--green)">' + esc(r.url) + '</a>(贴原文即用,四层门禁在岗)';
+        window.open(r.url, '_blank'); // 直接落到已装配好的 DSH 页面
       } catch (e) { alert('启动失败:' + e.message); }
       finally { b.textContent = '▶ 一键使用'; b.disabled = false; }
     };
