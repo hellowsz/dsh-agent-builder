@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { extractJsonRecord, parseGate, runGate, type GateDefinition } from '@dsh-agent-builder/gate-engine'
 import { buildFeedback, buildReviewFeedback, NO_RECORD_FEEDBACK } from './feedback.js'
 import { createReviewer, type ReviewChannelConfig, type Reviewer } from './review-runner.js'
+import { badgeHtml, badgeInfo } from './badge.js'
 
 export const name = 'gate-plugin'
 export const inject = ['systemPrompt']
@@ -44,11 +45,16 @@ interface LoggerLike { info(...args: unknown[]): void; warn(...args: unknown[]):
 interface SystemPromptLike {
   section(section: { readonly name: string; readonly order: number; readonly text: string }): unknown
 }
+interface WebServerLike {
+  tapIndex(transform: (html: string) => string): unknown
+}
 interface ContextLike {
   on(event: 'session/event', cb: (session: SessionLike, event: SessionEventLike) => void): unknown
   on(event: 'agent/turn-stopping', cb: (payload: { agent: AgentLike; turn: number }) => void | Promise<void>): unknown
   logger?: LoggerLike
   systemPrompt?: SystemPromptLike
+  /** cordis 可选依赖:服务就绪才回调(headless 无 webServer 则永不触发) */
+  inject?(deps: readonly string[], cb: (scoped: { webServer: WebServerLike }) => void): unknown
 }
 
 /** 每个会话跟踪的验收状态。 */
@@ -133,6 +139,13 @@ export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer
       ctx.logger?.warn(`[gate] ${gate.name}: 配置了 promptFile 但运行环境没有 systemPrompt 服务,提示词未注入`)
     }
   }
+  // 装配可观测:Web 页面注入徽章(headless 无 webServer,回调不触发,零影响)
+  const info = badgeInfo(gate, maxRetries, promptText !== undefined, feedbackFile !== undefined)
+  ctx.inject?.(['webServer'], (scoped) => {
+    scoped.webServer.tapIndex((html) => html.replace('</body>', `${badgeHtml(info)}</body>`))
+    ctx.logger?.info(`[gate] ${gate.name}: 装配徽章已注入 Web 页面`)
+  })
+
   const states = new WeakMap<SessionLike, SessionState>()
   const log = ctx.logger
 
