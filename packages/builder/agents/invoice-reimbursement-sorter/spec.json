@@ -1,0 +1,74 @@
+{
+  "name": "invoice-reimbursement-sorter",
+  "title": "发票报销整理助手",
+  "description": "拿到发票文字原文，产出结构化报销条目：费用项目、金额、税额、开票日期、发票号、类别。",
+  "fields": [
+    {
+      "name": "expense-item",
+      "label": "费用项目",
+      "kind": "text",
+      "grounded": false
+    },
+    {
+      "name": "amount",
+      "label": "金额",
+      "kind": "number",
+      "grounded": true
+    },
+    {
+      "name": "tax",
+      "label": "税额",
+      "kind": "number",
+      "grounded": true
+    },
+    {
+      "name": "invoice-date",
+      "label": "开票日期",
+      "kind": "date",
+      "grounded": true
+    },
+    {
+      "name": "invoice-no",
+      "label": "发票号",
+      "kind": "text",
+      "grounded": true
+    },
+    {
+      "name": "category",
+      "label": "类别",
+      "kind": "enum",
+      "values": [
+        "餐饮",
+        "交通",
+        "住宿",
+        "办公",
+        "其他"
+      ],
+      "grounded": false
+    }
+  ],
+  "rules": [
+    {
+      "id": "tax-not-exceed-amount",
+      "type": "compare",
+      "left": "tax",
+      "op": "<=",
+      "right": "amount"
+    },
+    {
+      "id": "invoice-date-not-future",
+      "type": "not-future",
+      "field": "invoice-date"
+    }
+  ],
+  "aiReview": [
+    {
+      "id": "category-reasonableness",
+      "criteria": "类别归类是否合理：发票的商品或服务内容应与其归入的餐饮/交通/住宿/办公/其他类别相符"
+    },
+    {
+      "id": "expense-item-accuracy",
+      "criteria": "费用项目描述是否与发票上的商品或服务名称一致，不得编造原文没有的内容"
+    }
+  ]
+}

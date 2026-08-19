@@ -1,0 +1,6 @@
+- insert:
+    - id: gate-invoice-reimbursement-sorter
+      name: /Users/wang/self/dsh-agent-builder/packages/gate-plugin/dist/gate-plugin.mjs
+      config:
+        gateFile: /Users/wang/self/dsh-agent-builder/packages/builder/agents/invoice-reimbursement-sorter/invoice-reimbursement-sorter.gate.yaml
+        maxRetries: 2

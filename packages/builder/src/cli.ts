@@ -2,12 +2,14 @@
 /**
  * 对话式搭建助手 CLI（面向纯新手的最小交互）。
  * 流程：描述任务 → 起草规格 → 清单确认 → 提供样例 → 跑稳定性验证 → 看报告 → 固化。
- * 需要环境变量 DEEPSEEK_API_KEY。
+ * 模型通道：设了 DEEPSEEK_API_KEY 走直连；没设自动回落本机 dsh headless(凭证留在 dsh 里)。
  */
 import { createInterface } from 'node:readline/promises'
 import { stdin, stdout, exit, env, cwd } from 'node:process'
-import { resolve } from 'node:path'
-import { createDeepSeekClient } from '@dsh-agent-builder/evaluator'
+import { dirname, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { createDeepSeekClient, createDshHeadlessClient, type ChatClient } from '@dsh-agent-builder/evaluator'
 import { draftSpec } from './interview.js'
 import { deriveGate } from './derive.js'
 import { runStability, renderReport, type Sample } from './stability.js'
@@ -34,16 +36,48 @@ function describeSpec(spec: TaskSpec): string {
   ].join('\n')
 }
 
-async function main(): Promise<void> {
-  const apiKey = env.DEEPSEEK_API_KEY ?? ''
-  if (apiKey === '') {
-    stdout.write('缺少环境变量 DEEPSEEK_API_KEY，无法继续。\n')
-    exit(1)
-  }
-  // 工作 agent 与评审各自独立的客户端（独立会话语义）
-  const workClient = createDeepSeekClient({ apiKey })
-  const reviewClient = createDeepSeekClient({ apiKey })
+/** 行队列读取器:兼容 TTY 与管道输入——先到的行排队,EOF 后返回空行,不再抛 readline was closed。 */
+function createLineReader() {
   const rl = createInterface({ input: stdin, output: stdout })
+  const queue: string[] = []
+  const waiters: Array<(s: string) => void> = []
+  let closed = false
+  rl.on('line', (l) => {
+    const w = waiters.shift()
+    if (w !== undefined) w(l)
+    else queue.push(l)
+  })
+  rl.on('close', () => {
+    closed = true
+    for (const w of waiters.splice(0)) w('')
+  })
+  return {
+    async question(prompt: string): Promise<string> {
+      stdout.write(prompt)
+      const queued = queue.shift()
+      if (queued !== undefined) {
+        stdout.write(`${queued}\n`)
+        return queued
+      }
+      if (closed) return ''
+      return new Promise((res) => waiters.push(res))
+    },
+    close(): void {
+      if (!closed) rl.close()
+    },
+  }
+}
+
+async function main(): Promise<void> {
+  // 模型通道:有 DEEPSEEK_API_KEY 走直连,否则回落到本机 dsh headless(凭证留在 dsh 里)
+  const apiKey = env.DEEPSEEK_API_KEY ?? ''
+  const makeClient = (): ChatClient =>
+    apiKey !== '' ? createDeepSeekClient({ apiKey }) : createDshHeadlessClient()
+  stdout.write(apiKey !== '' ? '模型通道:DeepSeek 直连\n' : '模型通道:本机 dsh headless(每次调用含冷启动,约 30-60 秒,请耐心)\n')
+  // 工作 agent 与评审各自独立的客户端（独立会话语义）
+  const workClient = makeClient()
+  const reviewClient = makeClient()
+  const rl = createLineReader()
 
   stdout.write('=== dsh-agent-builder 搭建助手 ===\n用大白话说：你想要一个帮你整理什么的 agent？\n\n')
   const description = (await rl.question('> ')).trim()
@@ -83,8 +117,12 @@ async function main(): Promise<void> {
   }
 
   const outDir = resolve(cwd(), 'agents')
+  const pluginPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../gate-plugin/dist/gate-plugin.mjs')
+  if (!existsSync(pluginPath)) {
+    stdout.write(`提示:插件产物未构建(${pluginPath}),固化后使用前请先执行:pnpm --filter @dsh-agent-builder/gate-plugin build\n`)
+  }
   const result = freeze(spec, report, outDir, {
-    pluginPath: resolve(cwd(), 'dist/gate-plugin.mjs'),
+    pluginPath,
     gateFilePath: resolve(outDir, spec.name, `${spec.name}.gate.yaml`),
   })
   stdout.write(`\n已固化到 ${result.dir}：\n${result.files.map((f) => `  - ${f}`).join('\n')}\n`)

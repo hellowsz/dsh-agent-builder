@@ -1,0 +1,65 @@
+version: 1
+name: invoice-reimbursement-sorter
+description: 发票报销整理助手：拿到发票文字原文，产出结构化报销条目：费用项目、金额、税额、开票日期、发票号、类别。
+checks:
+  - id: expense-item_empty
+    type: required
+    field: expense-item
+    message: 费用项目为空
+  - id: amount_invalid
+    type: number
+    field: amount
+    exclusiveMin: 0
+    message: 金额必须是大于 0 的数字
+  - id: tax_invalid
+    type: number
+    field: tax
+    exclusiveMin: 0
+    message: 税额必须是大于 0 的数字
+  - id: invoice-date_malformed
+    type: date
+    field: invoice-date
+    message: 开票日期不是合法的 YYYY-MM-DD：{value}
+  - id: invoice-no_empty
+    type: required
+    field: invoice-no
+    message: 发票号为空
+  - id: category_unknown
+    type: enum
+    field: category
+    values:
+      - 餐饮
+      - 交通
+      - 住宿
+      - 办公
+      - 其他
+    message: 类别不在允许集合内：{value}
+  - id: tax-not-exceed-amount
+    type: compare
+    left: tax
+    op: <=
+    right: amount
+  - id: invoice-date-not-future
+    type: not-future
+    field: invoice-date
+  - id: amount_not_grounded
+    type: number-grounded
+    field: amount
+    message: 金额（{value}）在原文里找不到依据，疑似改数或编造
+  - id: tax_not_grounded
+    type: number-grounded
+    field: tax
+    message: 税额（{value}）在原文里找不到依据，疑似改数或编造
+  - id: invoice-date_not_grounded
+    type: date-grounded
+    field: invoice-date
+    message: 开票日期（{value}）在原文里找不到依据
+  - id: invoice-no_not_grounded
+    type: text-grounded
+    field: invoice-no
+    message: 发票号（{value}）在原文里找不到，疑似编造
+aiReview:
+  - id: category-reasonableness
+    criteria: 类别归类是否合理：发票的商品或服务内容应与其归入的餐饮/交通/住宿/办公/其他类别相符
+  - id: expense-item-accuracy
+    criteria: 费用项目描述是否与发票上的商品或服务名称一致，不得编造原文没有的内容
