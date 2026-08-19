@@ -1,4 +1,4 @@
-import { mkdtempSync, existsSync } from 'node:fs'
+import { mkdtempSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type AddressInfo } from 'node:net'
@@ -38,6 +38,13 @@ const reviewClient: ChatClient = {
 
 const outDir = mkdtempSync(join(tmpdir(), 'webui-out-'))
 const sessionsDir = mkdtempSync(join(tmpdir(), 'webui-sessions-'))
+const catalogPath = join(mkdtempSync(join(tmpdir(), 'webui-cat-')), 'catalog.yaml')
+writeFileSync(catalogPath, `
+version: 1
+plugins:
+  - { name: a/dsh-invoice, url: 'https://x/a', description: '发票信息抽取', stars: 30, trust: 待核实 }
+  - { name: b/dsh-pet, url: 'https://x/b', description: '桌面宠物', stars: 5, trust: 待核实 }
+`)
 // 假执行器:模拟"候选配置交 DSH 执行"——按样例原文回产物(不真起 DSH);
 // 每个样例写一个交付文件进 runsDir,模拟 PPT 类文件产物
 const produceFactory = (presetFile: string, runsDir?: string) => async (sample: { source: string; name: string }) => {
@@ -58,7 +65,7 @@ const produceFactory = (presetFile: string, runsDir?: string) => async (sample: 
 const launched: string[] = []
 const launcher = async (presetFile: string) => { launched.push(presetFile); return 'http://127.0.0.1:3080' }
 const materialsCollector = async () => [{ name: '网络素材1', source: '网络示例 金额 428 元', expect: 'pass' as const, origin: 'web' as const }]
-const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs', sessionsDir, produceFactory, launcher, materialsCollector })
+const server = createWebuiServer({ workClient, reviewClient, outDir, pluginPath: '/tmp/fake-plugin.mjs', sessionsDir, produceFactory, launcher, materialsCollector, catalogPath })
 let base = ''
 
 beforeAll(async () => {
@@ -208,6 +215,14 @@ describe('webui 服务(任务制)', () => {
   it('一键启动:不存在的资产报错', async () => {
     const r = await post('/api/assets/launch', { name: 'nope' })
     expect(r.status).toBe(400)
+  })
+
+  it('生态清单:/api/plugins 列表 + 按 q 相关检索', async () => {
+    const all = await fetch(base + '/api/plugins').then((x) => x.json()) as { data: { total: number; plugins: Array<{ name: string }> } }
+    expect(all.data.total).toBe(2)
+    const rel = await fetch(base + '/api/plugins?q=' + encodeURIComponent('发票抽取')).then((x) => x.json()) as { data: { plugins: Array<{ name: string }> } }
+    expect(rel.data.plugins.map((p) => p.name)).toContain('a/dsh-invoice')
+    expect(rel.data.plugins.map((p) => p.name)).not.toContain('b/dsh-pet')
   })
 
   it('未知路径 404', async () => {

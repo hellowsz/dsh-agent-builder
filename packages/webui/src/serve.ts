@@ -23,6 +23,7 @@ const opts: WebuiOptions = {
   ...(env.AB_OUT_DIR !== undefined ? { outDir: env.AB_OUT_DIR } : {}),
   ...(env.AB_PLUGIN_PATH !== undefined ? { pluginPath: env.AB_PLUGIN_PATH } : {}),
   ...(launchUrl !== undefined ? { launcher: async () => launchUrl } : {}),
+  ...(env.AB_CATALOG_PATH !== undefined ? { catalogPath: env.AB_CATALOG_PATH } : {}),
 }
 const server = createWebuiServer(opts)
 

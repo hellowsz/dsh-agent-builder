@@ -25,6 +25,9 @@ import {
   TIER_LABEL,
   validateSpec,
   writeCandidate,
+  readCatalog,
+  relevantPlugins,
+  pluginsHint,
   type PipelineEvent,
   type ProducedOutput,
   type Sample,
@@ -58,6 +61,8 @@ export interface WebuiOptions {
   readonly launcher?: (presetFile: string) => Promise<string>
   /** 网络素材采集器(可注入,测试用):缺省 collectWebMaterials(真上网,默认开)。 */
   readonly materialsCollector?: (spec: TaskSpec) => Promise<Sample[]>
+  /** 插件生态清单文件路径(每日收集产出);设置后设计时喂相关插件给 AI + /api/plugins 可查 */
+  readonly catalogPath?: string
 }
 
 interface Envelope {
@@ -195,7 +200,8 @@ export function createWebuiServer(options: WebuiOptions): Server {
     }
     throw new Error('DSH 启动超时(90 秒),请查看终端确认 dsh 是否可用')
   })
-  bus.log('info', 'sys', `服务就绪(已加载 ${store.list().length} 个历史任务)`)
+  const catalogPath = options.catalogPath
+  bus.log('info', 'sys', `服务就绪(已加载 ${store.list().length} 个历史任务${catalogPath !== undefined ? `,插件生态清单 ${readCatalog(catalogPath).length} 条` : ''})`)
 
   return createServer((req, res) => {
     void handle(req, res).catch((e: unknown) => {
@@ -221,6 +227,14 @@ export function createWebuiServer(options: WebuiOptions): Server {
     }
     if (req.method === 'GET' && url === '/api/logs') {
       send(res, 200, { ok: true, data: { logs: bus.history() } })
+      return
+    }
+    if (req.method === 'GET' && url.startsWith('/api/plugins')) {
+      const all = catalogPath !== undefined ? readCatalog(catalogPath) : []
+      const params = new URL(url, 'http://x').searchParams
+      const q = params.get('q') ?? ''
+      const list = q !== '' ? relevantPlugins(all, q, 20) : all.slice(0, 50)
+      send(res, 200, { ok: true, data: { total: all.length, plugins: list } })
       return
     }
     if (req.method === 'GET' && url === '/api/tasks') {
@@ -323,7 +337,12 @@ export function createWebuiServer(options: WebuiOptions): Server {
           const feedback = typeof body.feedback === 'string' ? body.feedback.trim() : ''
           const prompt = feedback === '' ? task.description : `${task.description}\n\n用户的修改意见：${feedback}`
           bus.log('info', 'draft', `[${task.title}] ${feedback === '' ? '起草拼接说明书' : '按意见修订说明书'}`)
-          const spec = await draftSpec(workClient, prompt)
+          let hint = ''
+          if (catalogPath !== undefined) {
+            const rel = relevantPlugins(readCatalog(catalogPath), task.description, 5)
+            if (rel.length > 0) { hint = pluginsHint(rel); bus.log('info', 'draft', `[${task.title}] 生态里挑到 ${rel.length} 个可能相关插件供设计参考:${rel.map((r) => r.name).join(', ')}`) }
+          }
+          const spec = await draftSpec(workClient, prompt, 3, hint)
           const updated = store.update(task.id, { spec, title: spec.title, status: 'draft' })
           bus.log('ok', 'draft', `[${spec.title}] 说明书草案就绪(${spec.fields.length} 字段/${spec.rules.length} 规则/${spec.aiReview.length} 评审项)`, { spec })
           send(res, 200, { ok: true, data: { task: updated } })

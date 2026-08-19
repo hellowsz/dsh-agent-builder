@@ -21,6 +21,7 @@ import { runStability, renderReport, type PipelineEvent, type Sample, type Stabi
 import { collectWebMaterials } from './web-material.js'
 import { mergeSampleBank, tierOf, TIER_LABEL } from './confidence.js'
 import { readRuntimeBlocks, readRuntimeEvidence } from './runtime-feedback.js'
+import { readCatalog, relevantPlugins, pluginsHint } from './plugin-catalog.js'
 import { freeze } from './freeze.js'
 import { TaskStore, type BuilderTask } from './tasks.js'
 import { type TaskSpec } from './spec.js'
@@ -30,6 +31,7 @@ const REPO = resolve(here, '../../..')
 const SESSIONS = join(REPO, 'sessions')
 const ASSETS = join(REPO, 'agents')
 const PLUGIN = join(REPO, 'packages/gate-plugin/dist/gate-plugin.mjs')
+const CATALOG = env.AB_CATALOG_PATH ?? join(REPO, 'plugin-registry/catalog.yaml')
 
 const apiKey = env.DEEPSEEK_API_KEY ?? ''
 const makeClient = (): ChatClient => (apiKey !== '' ? createDeepSeekClient({ apiKey }) : createDshHeadlessClient())
@@ -152,7 +154,9 @@ async function runTask(id: string): Promise<void> {
   for (;;) {
     if (task.status === 'draft' && task.spec === undefined) {
       log('draft', '起草拼接说明书…')
-      const spec = await draftSpec(workClient, task.description)
+      const rel = relevantPlugins(readCatalog(CATALOG), task.description, 5)
+      if (rel.length > 0) log('draft', `生态里挑到 ${rel.length} 个相关插件供参考:${rel.map((r) => r.name).join(', ')}`)
+      const spec = await draftSpec(workClient, task.description, 3, pluginsHint(rel))
       task = store.update(task.id, { spec, title: spec.title })
     }
     if (task.status === 'draft') {
@@ -257,6 +261,8 @@ async function main(): Promise<void> {
     const stName = { draft: '起草中', review: '待评估', frozen: '已定稿' } as const
     tasks.forEach((t, i) => stdout.write(`  [${i + 1}] ${t.title}(${stName[t.status]})\n`))
     if (tasks.length === 0) stdout.write('  (空)\n')
+    const ecoN = readCatalog(CATALOG).length
+    if (ecoN > 0) stdout.write(`\n生态:每日自动收集,当前 ${ecoN} 个 DSH 插件(设计时自动参考)\n`)
     const a = (await rl.ask('命令: n=新建任务  <序号>=打开  a=资产库  q=退出\n> ')).trim().toLowerCase()
     if (a === 'q' || a === '') break
     if (a === 'a') { await assetsMenu(); continue }

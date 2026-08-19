@@ -130,6 +130,9 @@
     <div class="row" style="margin:0 0 8px"><button id="btnNewTask" style="width:100%">+ 新建搭建任务</button></div>
     <div id="taskList"></div>
     <div style="height:14px"></div>
+    <h3>ECOSYSTEM · 插件生态</h3>
+    <div id="ecoBox"><p class="hint" id="ecoInfo">加载中…</p></div>
+    <div style="height:14px"></div>
     <h3>PIPELINE</h3>
     <div class="node" id="n1"><div class="t">01 需求起草</div><div class="s" id="n1s">待开始</div></div>
     <div class="link"></div>
@@ -563,8 +566,18 @@ $('btnFreeze').onclick = async () => {
 
 $('btnAgain').onclick = () => { task = null; resume(); };
 
+async function loadEco() {
+  try {
+    const d = await (await fetch('/api/plugins')).json();
+    const n = d.data.total;
+    $('ecoInfo').innerHTML = n > 0
+      ? '每日自动收集 · 当前 <b style="color:var(--cyan)">' + n + '</b> 个 DSH 插件<br><span style="color:var(--dim)">设计方案时会自动挑相关的喂给 AI</span>'
+      : '生态清单未接入';
+  } catch (e) { $('ecoInfo').textContent = '生态清单读取失败'; }
+}
 loadTasks();
 loadAssets();
+loadEco();
 resume();
 </script>
 </body>

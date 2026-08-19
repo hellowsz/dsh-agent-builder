@@ -27,12 +27,12 @@ const SYSTEM_PROMPT = [
 ].join('\n')
 
 /** 让 LLM 起草规格；带确定性校验与重试（把校验问题喂回去改）。 */
-export async function draftSpec(client: ChatClient, userDescription: string, maxAttempts = 3): Promise<TaskSpec> {
+export async function draftSpec(client: ChatClient, userDescription: string, maxAttempts = 3, pluginsHint = ''): Promise<TaskSpec> {
   let feedback = ''
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const text = await client.chat([
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: feedback === '' ? userDescription : `${userDescription}\n\n上一稿的问题，请修正后重新输出完整 JSON：\n${feedback}` },
+      { role: 'user', content: (feedback === '' ? userDescription : `${userDescription}\n\n上一稿的问题，请修正后重新输出完整 JSON：\n${feedback}`) + (pluginsHint !== '' ? `\n\n${pluginsHint}` : '') },
     ])
     // 容错：LLM 可能把 JSON 包在围栏/说明文字里
     const parsed = extractJsonRecord(text)
