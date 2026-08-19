@@ -2,6 +2,7 @@
  * 运行时 ④ 评审接入：确定性三层过后才评审;不过则 steer 评审理由;
  * 评审通道出错同样消耗重试;预算耗尽诚实告警放行。
  */
+import { writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { type ReviewResult } from '@dsh-agent-builder/evaluator'
 import { applyCore } from '../src/index.js'
@@ -92,6 +93,27 @@ describe('运行时 ④ 评审', () => {
     await h.stopTurn(1) // 预算耗尽
     expect(h.steers).toHaveLength(1)
     expect(h.logs.some((l) => l.includes('仅确定性检查把关放行'))).toBe(true)
+  })
+
+  it('配置 promptFile → 注入为部署 persona(order 0)', () => {
+    const h = makeHarness()
+    const sections: Array<{ name: string; order: number; text: string }> = []
+    const ctx = { ...h.ctx, systemPrompt: { section: (s: { name: string; order: number; text: string }) => sections.push(s) } }
+    const promptDir = writeGateFile(GATE_WITH_REVIEW) // 借临时目录
+    const promptFile = promptDir.replace('test.gate.yaml', 'prompt.md')
+    writeFileSync(promptFile, '你是报销整理助手')
+    applyCore(ctx as never, { gateFile: promptDir, promptFile })
+    expect(sections).toHaveLength(1)
+    expect(sections[0]).toMatchObject({ name: 'gate-agent-prompt:review-runtime', order: 0, text: '你是报销整理助手' })
+  })
+
+  it('配置 promptFile 但无 systemPrompt 服务 → 告警不崩', () => {
+    const h = makeHarness()
+    const gateFile = writeGateFile(GATE_WITH_REVIEW)
+    const promptFile = gateFile.replace('test.gate.yaml', 'p.md')
+    writeFileSync(promptFile, 'x')
+    applyCore(h.ctx as never, { gateFile, promptFile })
+    expect(h.logs.some((l) => l.includes('提示词未注入'))).toBe(true)
   })
 
   it('未注入评审器(如 reviewMode=off) → 只跑确定性,不拦', async () => {

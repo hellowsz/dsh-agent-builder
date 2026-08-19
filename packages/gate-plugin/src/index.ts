@@ -15,6 +15,7 @@ import { buildFeedback, buildReviewFeedback, NO_RECORD_FEEDBACK } from './feedba
 import { createReviewer, type ReviewChannelConfig, type Reviewer } from './review-runner.js'
 
 export const name = 'gate-plugin'
+export const inject = ['systemPrompt']
 export { createReviewer, type Reviewer, type ReviewChannelConfig } from './review-runner.js'
 
 /** 插件配置。 */
@@ -23,6 +24,8 @@ export interface GatePluginConfig extends ReviewChannelConfig {
   readonly gateFile: string
   /** 最大重试次数（steer 重开回合的上限），默认 2 */
   readonly maxRetries?: number
+  /** 工作提示词文件(md)的绝对路径:配置后注入为部署 persona,固化的 agent 一条命令即可用 */
+  readonly promptFile?: string
 }
 
 // ---- 面向 DSH 的最小结构类型（鸭子类型，便于单测注入替身） ----
@@ -36,10 +39,14 @@ interface AgentLike {
   steer(message: unknown): void
 }
 interface LoggerLike { info(...args: unknown[]): void; warn(...args: unknown[]): void }
+interface SystemPromptLike {
+  section(section: { readonly name: string; readonly order: number; readonly text: string }): unknown
+}
 interface ContextLike {
   on(event: 'session/event', cb: (session: SessionLike, event: SessionEventLike) => void): unknown
   on(event: 'agent/turn-stopping', cb: (payload: { agent: AgentLike; turn: number }) => void | Promise<void>): unknown
   logger?: LoggerLike
+  systemPrompt?: SystemPromptLike
 }
 
 /** 每个会话跟踪的验收状态。 */
@@ -80,14 +87,17 @@ function steerMessage(text: string): unknown {
 }
 
 /** 校验配置并加载门禁文件。配置是系统边界，快速失败。 */
-export function loadConfig(config: unknown): { gate: GateDefinition; maxRetries: number; gateFile: string } {
+export function loadConfig(config: unknown): { gate: GateDefinition; maxRetries: number; gateFile: string; promptText?: string } {
   if (typeof config !== 'object' || config === null) throw new Error('gate-plugin 需要配置对象')
   const c = config as Partial<GatePluginConfig>
   if (typeof c.gateFile !== 'string' || c.gateFile.trim() === '') throw new Error('gate-plugin 配置缺少 gateFile')
   const maxRetries = c.maxRetries ?? 2
   if (!Number.isInteger(maxRetries) || maxRetries < 0) throw new Error('gate-plugin 的 maxRetries 必须是非负整数')
   const gate = parseGate(readFileSync(c.gateFile, 'utf8'))
-  return { gate, maxRetries, gateFile: c.gateFile }
+  const promptText = typeof c.promptFile === 'string' && c.promptFile.trim() !== ''
+    ? readFileSync(c.promptFile, 'utf8')
+    : undefined
+  return { gate, maxRetries, gateFile: c.gateFile, promptText }
 }
 
 /** cordis 入口：按配置建评审通道（门禁没有 aiReview 条目则不建）。 */
@@ -100,7 +110,16 @@ export function apply(ctx: ContextLike, config: unknown): void {
 
 /** 核心装配（评审执行器可注入，便于单测）。 */
 export function applyCore(ctx: ContextLike, config: unknown, reviewer?: Reviewer): void {
-  const { gate, maxRetries, gateFile } = loadConfig(config)
+  const { gate, maxRetries, gateFile, promptText } = loadConfig(config)
+
+  // 注入工作提示词为部署 persona(order 0),固化的 agent 免手动贴提示词
+  if (promptText !== undefined) {
+    if (ctx.systemPrompt !== undefined) {
+      ctx.systemPrompt.section({ name: `gate-agent-prompt:${gate.name}`, order: 0, text: promptText })
+    } else {
+      ctx.logger?.warn(`[gate] ${gate.name}: 配置了 promptFile 但运行环境没有 systemPrompt 服务,提示词未注入`)
+    }
+  }
   const states = new WeakMap<SessionLike, SessionState>()
   const log = ctx.logger
 

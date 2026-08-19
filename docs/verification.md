@@ -15,6 +15,7 @@
 | 7 | ④ 独立评审真模型 | `pnpm verify:real` ① | ✅ 合理产出放行、胡归类+编造备注拦下（2026-08-18） |
 | 8 | builder 端到端真跑 | `pnpm verify:real` ② | ✅ 真起草→真抽取→门禁+评审→固化，2/2 样例符合预期（2026-08-18） |
 | 9 | **运行时 ④ 评审闭环(真 DSH+真模型+真评审子进程)** | `pnpm verify:review`(暗号法) | ✅ 输出含暗号 REVIEW-OK-7788（2026-08-18） |
+| 10 | 提示词注入(preset promptFile → systemPrompt.section) | 真 DSH headless,只贴原文不贴提示词 | ✅ 输出含只存在于 prompt.md 的字段名 expense-item/invoice-no（2026-08-19） |
 
 ## 真环境验证抓出的问题（这就是要做真验证的原因）
 

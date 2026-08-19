@@ -25,10 +25,14 @@ export function freeze(
   const dir = join(outDir, spec.name)
   mkdirSync(dir, { recursive: true })
 
+  const presetWithPrompt = {
+    ...presetOptions,
+    promptFilePath: presetOptions.promptFilePath ?? join(dir, `${spec.name}.prompt.md`),
+  }
   const files: Array<[string, string]> = [
     [`${spec.name}.gate.yaml`, deriveGateYaml(spec)],
     [`${spec.name}.prompt.md`, deriveWorkPrompt(spec)],
-    [`${spec.name}.preset.yaml`, derivePresetYaml(spec, presetOptions)],
+    [`${spec.name}.preset.yaml`, derivePresetYaml(spec, presetWithPrompt)],
     ['spec.json', JSON.stringify(spec, null, 2)],
     ['report.md', renderReport(spec, report)],
   ]

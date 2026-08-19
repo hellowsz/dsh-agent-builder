@@ -10,6 +10,8 @@ export interface PresetOptions {
   readonly pluginPath: string
   /** 门禁文件的绝对路径 */
   readonly gateFilePath: string
+  /** 工作提示词文件的绝对路径(注入为部署 persona,一条命令即可用) */
+  readonly promptFilePath?: string
   /** steer 重试上限，默认 2 */
   readonly maxRetries?: number
 }
@@ -24,6 +26,7 @@ export function derivePresetYaml(spec: TaskSpec, options: PresetOptions): string
           name: options.pluginPath,
           config: {
             gateFile: options.gateFilePath,
+            ...(options.promptFilePath !== undefined ? { promptFile: options.promptFilePath } : {}),
             maxRetries: options.maxRetries ?? 2,
           },
         },
