@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agent 搭建向导</title>
+<style>
+  :root { --blue:#2563eb; --green:#16a34a; --red:#dc2626; --gray:#6b7280; --bg:#f8fafc; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:#111827; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  h1 { font-size:22px; }
+  h1 small { font-size:13px; color:var(--gray); font-weight:normal; margin-left:8px; }
+  .steps { display:flex; gap:6px; margin:16px 0 24px; }
+  .steps span { flex:1; text-align:center; font-size:12px; padding:6px 2px; background:#e5e7eb; border-radius:6px; color:var(--gray); }
+  .steps span.on { background:var(--blue); color:#fff; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin-bottom:16px; }
+  .card h2 { margin:0 0 6px; font-size:17px; }
+  .hint { color:var(--gray); font-size:13px; margin:0 0 12px; }
+  textarea { width:100%; min-height:88px; padding:10px; font-size:14px; border:1px solid #d1d5db; border-radius:8px; resize:vertical; font-family:inherit; }
+  button { padding:10px 22px; font-size:15px; border:0; border-radius:8px; background:var(--blue); color:#fff; cursor:pointer; }
+  button.secondary { background:#e5e7eb; color:#374151; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
+  .spin { display:none; align-items:center; gap:10px; margin-top:14px; color:var(--gray); font-size:14px; }
+  .spin.on { display:flex; }
+  .dot { width:16px; height:16px; border:3px solid #dbeafe; border-top-color:var(--blue); border-radius:50%; animation:r 1s linear infinite; }
+  @keyframes r { to { transform:rotate(360deg); } }
+  .err { display:none; margin-top:12px; padding:10px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; color:var(--red); font-size:14px; white-space:pre-wrap; }
+  .err.on { display:block; }
+  ul.plan { padding-left:18px; margin:8px 0; }
+  ul.plan li { margin:4px 0; font-size:14px; }
+  .tag { display:inline-block; font-size:12px; padding:1px 8px; border-radius:99px; background:#eff6ff; color:var(--blue); margin-left:6px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:10px; }
+  th,td { border:1px solid #e5e7eb; padding:8px 10px; text-align:left; }
+  th { background:#f1f5f9; }
+  .ok { color:var(--green); font-weight:bold; }
+  .bad { color:var(--red); font-weight:bold; }
+  code.cmd { display:block; background:#0f172a; color:#e2e8f0; padding:12px; border-radius:8px; font-size:12px; overflow-x:auto; margin-top:8px; white-space:pre-wrap; word-break:break-all; }
+  .sample { margin-bottom:10px; }
+  .sample label { font-size:13px; color:var(--gray); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>agent 搭建向导 <small>说清要什么,得到一个稳定干活的 agent</small></h1>
+  <div class="steps">
+    <span id="tab1" class="on">1 说需求</span><span id="tab2">2 确认方案</span><span id="tab3">3 贴样例</span><span id="tab4">4 验证报告</span><span id="tab5">5 完成</span>
+  </div>
+
+  <div class="card" id="step1">
+    <h2>你想要一个帮你做什么的助手?</h2>
+    <p class="hint">用大白话写:给它什么、要它整理出什么。例:我把发票文字贴给它,它整理出费用项目、金额、税额、开票日期、发票号、类别(餐饮/交通/住宿/办公/其他)。金额日期发票号不能编。</p>
+    <textarea id="desc" placeholder="在这里描述……"></textarea>
+    <div class="row"><button id="btnDraft">下一步:帮我整理方案</button></div>
+    <div class="spin" id="spin1"><div class="dot"></div><span>AI 正在整理你的需求,大约需要 1 分钟,请别关页面……</span></div>
+    <div class="err" id="err1"></div>
+  </div>
+
+  <div class="card" id="step2" style="display:none">
+    <h2>方案确认</h2>
+    <p class="hint">看看下面的方案对不对。不对就写修改意见,对就确认。</p>
+    <div id="specView"></div>
+    <textarea id="feedback" placeholder="要改哪里?直接用大白话写(留空表示没意见)"></textarea>
+    <div class="row">
+      <button id="btnConfirm">✓ 就这样,下一步</button>
+      <button class="secondary" id="btnRevise">按我的意见重新整理</button>
+    </div>
+    <div class="spin" id="spin2"><div class="dot"></div><span>AI 正在按你的意见重新整理,大约 1 分钟……</span></div>
+    <div class="err" id="err2"></div>
+  </div>
+
+  <div class="card" id="step3" style="display:none">
+    <h2>贴 1-3 个真实样例</h2>
+    <p class="hint">拿真实的原文来试(比如一张真发票的文字)。样例越真,验证越靠谱。</p>
+    <div class="sample"><label>样例 1(必填)</label><textarea id="s1"></textarea></div>
+    <div class="sample"><label>样例 2(选填)</label><textarea id="s2"></textarea></div>
+    <div class="sample"><label>样例 3(选填)</label><textarea id="s3"></textarea></div>
+    <div class="row"><button id="btnVerify">开始验证</button></div>
+    <div class="spin" id="spin3"><div class="dot"></div><span>正在逐个样例试跑:AI 干活 → 机器验收 → 另一个 AI 评审。每个样例约 1-2 分钟……</span></div>
+    <div class="err" id="err3"></div>
+  </div>
+
+  <div class="card" id="step4" style="display:none">
+    <h2>稳定性报告</h2>
+    <p class="hint">这是诚实的结果:每个样例过没过、没过的原因。全过再固化最稳妥。</p>
+    <div id="reportView"></div>
+    <div class="row">
+      <button id="btnFreeze">固化这个 agent</button>
+      <button class="secondary" id="btnBack">返回改样例</button>
+    </div>
+    <div class="spin" id="spin4"><div class="dot"></div><span>正在固化……</span></div>
+    <div class="err" id="err4"></div>
+  </div>
+
+  <div class="card" id="step5" style="display:none">
+    <h2>🎉 完成!你的 agent 已固化</h2>
+    <div id="doneView"></div>
+    <div class="row"><button class="secondary" id="btnAgain">再搭一个</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+let spec = null, report = null;
+const $ = (id) => document.getElementById(id);
+const show = (n) => {
+  for (let i = 1; i <= 5; i++) {
+    $('step' + i).style.display = i === n ? '' : 'none';
+    $('tab' + i).classList.toggle('on', i === n);
+  }
+  window.scrollTo(0, 0);
+};
+const busy = (n, on) => { $('spin' + n).classList.toggle('on', on); $('err' + n).classList.remove('on'); };
+const fail = (n, msg) => { $('err' + n).textContent = msg; $('err' + n).classList.add('on'); };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(path, body) {
+  const res = await fetch(path, { method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || '未知错误');
+  return data.data;
+}
+
+function renderSpec(s) {
+  const kindName = { text: '文字', number: '数字', date: '日期', enum: '选项' };
+  const fields = s.fields.map((f) =>
+    '<li>' + esc(f.label) + '<span class="tag">' + (kindName[f.kind] || f.kind) +
+    (f.kind === 'enum' ? ':' + esc((f.values || []).join('/')) : '') + '</span>' +
+    (f.optional ? '<span class="tag">可空</span>' : '') + '</li>').join('');
+  const rules = s.rules.length
+    ? s.rules.map((r) => '<li>' + esc(r.message || r.id) + '</li>').join('')
+    : '<li>(无)</li>';
+  const reviews = s.aiReview.length
+    ? s.aiReview.map((a) => '<li>' + esc(a.criteria) + '</li>').join('')
+    : '<li>(无)</li>';
+  $('specView').innerHTML =
+    '<p><b>' + esc(s.title) + '</b> — ' + esc(s.description) + '</p>' +
+    '<p style="margin-bottom:2px"><b>它会整理出:</b></p><ul class="plan">' + fields + '</ul>' +
+    '<p style="margin-bottom:2px"><b>机器每次都会检查:</b></p><ul class="plan">' + rules + '</ul>' +
+    '<p style="margin-bottom:2px"><b>另请独立 AI 评审把关:</b></p><ul class="plan">' + reviews + '</ul>';
+}
+
+function renderReport(r) {
+  const rows = r.results.map((x) =>
+    '<tr><td>' + esc(x.name) + '</td><td class="' + (x.ok ? 'ok' : 'bad') + '">' + (x.ok ? '通过 ✓' : '未过 ✗') + '</td><td>' +
+    (x.issues.length ? esc(x.issues.join('、')) : '—') + '</td></tr>').join('');
+  const pct = Math.round(r.matchRate * 100);
+  $('reportView').innerHTML =
+    '<p>' + r.total + ' 个样例,' + r.matched + ' 个符合预期(<b class="' + (pct === 100 ? 'ok' : 'bad') + '">' + pct + '%</b>)</p>' +
+    '<table><tr><th>样例</th><th>结果</th><th>问题</th></tr>' + rows + '</table>' +
+    (pct < 100 ? '<p class="hint" style="margin-top:10px">有样例没过。建议返回改样例或修改方案;执意固化也可以,但要知道这些情况会翻车。</p>' : '');
+}
+
+$('btnDraft').onclick = async () => {
+  const description = $('desc').value.trim();
+  if (!description) return fail(1, '请先写一句描述');
+  busy(1, true); $('btnDraft').disabled = true;
+  try { spec = (await api('/api/draft', { description })).spec; renderSpec(spec); show(2); }
+  catch (e) { fail(1, e.message); }
+  finally { busy(1, false); $('btnDraft').disabled = false; }
+};
+
+$('btnRevise').onclick = async () => {
+  const feedback = $('feedback').value.trim();
+  if (!feedback) return fail(2, '请先写修改意见,或直接点「就这样」');
+  busy(2, true);
+  try { spec = (await api('/api/draft', { description: $('desc').value.trim(), feedback })).spec; renderSpec(spec); $('feedback').value = ''; }
+  catch (e) { fail(2, e.message); }
+  finally { busy(2, false); }
+};
+
+$('btnConfirm').onclick = () => show(3);
+
+$('btnVerify').onclick = async () => {
+  const samples = [$('s1').value, $('s2').value, $('s3').value]
+    .map((v) => v.trim()).filter(Boolean).map((source) => ({ source }));
+  if (!samples.length) return fail(3, '至少贴一个样例');
+  busy(3, true); $('btnVerify').disabled = true;
+  try { report = (await api('/api/verify', { spec, samples })).report; renderReport(report); show(4); }
+  catch (e) { fail(3, e.message); }
+  finally { busy(3, false); $('btnVerify').disabled = false; }
+};
+
+$('btnBack').onclick = () => show(3);
+
+$('btnFreeze').onclick = async () => {
+  busy(4, true); $('btnFreeze').disabled = true;
+  try {
+    const d = await api('/api/freeze', { spec, report });
+    $('doneView').innerHTML =
+      '<p>产物已保存到:</p><code class="cmd">' + esc(d.dir) + '</code>' +
+      '<ul class="plan">' + d.files.map((f) => '<li>' + esc(f) + '</li>').join('') + '</ul>' +
+      '<p>在 DeepSeek Harness 里启动它(终端里执行,然后打开 http://127.0.0.1:3080):</p>' +
+      '<code class="cmd">' + esc(d.dshCommand) + '</code>' +
+      '<p class="hint">以后每次产出都会先过验收门禁:不合格自动打回重做,重试用尽会如实告知。</p>';
+    show(5);
+  } catch (e) { fail(4, e.message); }
+  finally { busy(4, false); $('btnFreeze').disabled = false; }
+};
+
+$('btnAgain').onclick = () => { spec = null; report = null; $('desc').value = ''; ['s1','s2','s3'].forEach((i) => $(i).value = ''); show(1); };
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "@dsh-agent-builder/webui",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "面向纯新手的网页向导:说需求→确认方案→贴样例→看稳定性报告→一键固化",
+  "main": "src/server.ts",
+  "scripts": {
+    "test": "vitest run",
+    "serve": "tsx src/serve.ts"
+  },
+  "dependencies": {
+    "@dsh-agent-builder/builder": "workspace:*",
+    "@dsh-agent-builder/evaluator": "workspace:*",
+    "@dsh-agent-builder/gate-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8",
+    "tsx": "^4.19.2"
+  }
+}

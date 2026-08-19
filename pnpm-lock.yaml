@@ -114,6 +114,28 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9
 
+  packages/webui:
+    dependencies:
+      '@dsh-agent-builder/builder':
+        specifier: workspace:*
+        version: link:../builder
+      '@dsh-agent-builder/evaluator':
+        specifier: workspace:*
+        version: link:../evaluator
+      '@dsh-agent-builder/gate-engine':
+        specifier: workspace:*
+        version: link:../gate-engine
+    devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.12
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9
+
 packages:
 
   /@esbuild/aix-ppc64@0.21.5:

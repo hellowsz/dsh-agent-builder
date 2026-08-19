@@ -23,11 +23,17 @@ AI agent 的老毛病:同样的输入,今天对、明天错。会编数字、编
 
 ```sh
 pnpm install
-export DEEPSEEK_API_KEY=sk-...
 
-# 对话式搭建：描述任务 → 确认规格 → 贴样例 → 看稳定性报告 → 固化
+# 方式一:网页向导(推荐给不熟终端的用户)——打开 http://127.0.0.1:4173
+pnpm --filter @dsh-agent-builder/webui serve
+
+# 方式二:命令行对话
 pnpm --filter @dsh-agent-builder/builder cli
 ```
+
+模型通道二选一:设 `DEEPSEEK_API_KEY` 走 DeepSeek 直连;不设则自动回落本机 `dsh --profile headless`(凭证留在 dsh 里,每步约 1 分钟)。
+
+网页向导五步:说需求 → 确认方案(可提修改意见) → 贴 1-3 个真实样例 → 看诚实的稳定性报告 → 一键固化并拿到 DSH 启动命令。
 
 固化产物在 `agents/<name>/`:门禁(`*.gate.yaml`)、提示词(`*.prompt.md`)、DSH preset(`*.preset.yaml`)、规格与稳定性报告。在 DSH 里使用:
 
@@ -42,6 +48,7 @@ dsh --patch agents/<name>/<name>.preset.yaml web
 
 ```
 packages/
+  webui/          面向纯新手的网页向导(零框架单页,只绑 127.0.0.1)
   gate-engine/    通用门禁引擎:声明式门禁文件(一 agent 一份)+ 确定性执行器
   gate-plugin/    DSH 运行时插件:turn-stopping 拦截 + steer 重试限次(esbuild 单文件部署)
   evaluator/      ④ 独立评审 agent(DeepSeek API;缺结论=评审失败,绝不静默放行)
